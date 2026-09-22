@@ -232,9 +232,11 @@ sfs watch  --interval 30
 }
 ```
 
-> **Si vous changez `relay.port`**, reportez le nouveau port dans
-> `packages/figma-plugin/manifest.json`, section `networkAccess.allowedDomains` :
-> Figma n'autorise le plugin à joindre que les adresses qui y sont déclarées.
+> **Sur `networkAccess.allowedDomains` du manifeste du plugin.** Figma refuse
+> une adresse IP suivie d'un port (`http://127.0.0.1:7788`) dans cette liste :
+> elle est donc déclarée en générique (`*`). Le code du plugin, lui, n'appelle
+> qu'une seule adresse — celle saisie dans son interface, le relay local. Vous
+> pouvez ainsi changer `relay.port` sans toucher au manifeste.
 
 ---
 

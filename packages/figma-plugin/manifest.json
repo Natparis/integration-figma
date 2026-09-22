@@ -4,11 +4,15 @@
   "api": "1.0.0",
   "main": "dist/code.js",
   "ui": "dist/ui.html",
-  "editorType": ["figma"],
+  "editorType": [
+    "figma"
+  ],
   "documentAccess": "dynamic-page",
   "capabilities": [],
   "networkAccess": {
-    "allowedDomains": ["http://127.0.0.1:7788", "http://localhost:7788"],
-    "reasoning": "Lit le design-spec et les assets servis par le relay local du CLI. Aucune donnee ne quitte la machine."
+    "allowedDomains": [
+      "*"
+    ],
+    "reasoning": "Le plugin ne contacte qu'une seule adresse : le relay local lance par le CLI sur votre machine (127.0.0.1), pour y lire le design-spec et les assets. Figma refuse une adresse IP avec port dans cette liste, d'ou le caractere generique ; le code du plugin, lui, n'appelle que l'adresse que vous saisissez dans son interface. Aucune donnee ne quitte votre poste."
   }
 }
