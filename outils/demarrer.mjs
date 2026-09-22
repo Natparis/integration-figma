@@ -40,11 +40,22 @@ const erreur = (texte) => dire('  ' + peindre('✗', 'rouge') + ' ' + texte);
 /** Lance une commande en affichant sa sortie, et attend la fin. */
 function executer(commande, args, options = {}) {
   return new Promise((resolve) => {
+    // Le shell n'est necessaire que pour les commandes designees par un nom nu
+    // (`npm`, `npx`), qui sont des scripts sous Windows. Il est nuisible des que
+    // la commande est un chemin : `C:\Program Files\nodejs\node.exe` serait
+    // coupe au premier espace, et Windows repondrait « 'C:\Program' n'est pas
+    // reconnu ».
+    //
+    // Le critere est la presence d'un separateur, et non `path.isAbsolute` : ce
+    // dernier ignore les lettres de lecteur Windows lorsqu'il s'execute ailleurs,
+    // ce qui rendrait la regle intestable hors de Windows.
+    const estUnChemin = /[\\/]/.test(commande);
+    const besoinShell = process.platform === 'win32' && !estUnChemin;
+
     const enfant = spawn(commande, args, {
       cwd: RACINE,
       stdio: options.silencieux ? ['ignore', 'pipe', 'pipe'] : 'inherit',
-      // Sous Windows, `npm` et `npx` sont des scripts : ils ont besoin du shell.
-      shell: process.platform === 'win32',
+      shell: besoinShell,
       env: {
         ...process.env,
         // Les avertissements de depreciation de Node n'appellent aucune action
@@ -121,7 +132,16 @@ async function principal() {
   const chercherNavigateur = async () => {
     const sonde = await executer(process.execPath, [cliSync, 'doctor'], { silencieux: true });
     const ligne = /✓ (Chromium [^\n]*)/.exec(sonde.sortie);
-    return ligne ? ligne[1].trim() : null;
+    if (ligne) return ligne[1].trim();
+    // Distinguer « aucun navigateur » d'« impossible de poser la question » :
+    // confondre les deux envoie chercher un probleme la ou il n'est pas.
+    if (!/Verification de l environnement/.test(sonde.sortie)) {
+      alerte('La verification du navigateur n a pas pu s executer :');
+      for (const ligneSortie of sonde.sortie.trim().split('\n').slice(0, 4)) {
+        dire('      ' + ligneSortie);
+      }
+    }
+    return null;
   };
 
   let navigateur = await chercherNavigateur();

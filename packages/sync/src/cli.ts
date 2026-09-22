@@ -253,6 +253,12 @@ async function commandDoctor(
       'Chromium',
       error instanceof BrowserNotFoundError ? error.message : String(error),
     );
+    // Lister les emplacements inspectes : sans cela, il faut deviner pourquoi un
+    // navigateur pourtant installe n'est pas vu.
+    const { inspectedPaths } = await import('./browser/launch.js');
+    logger.plain('');
+    logger.plain('      Emplacements inspectes :');
+    for (const chemin of inspectedPaths()) logger.plain(`        · ${chemin}`);
   }
 
   try {

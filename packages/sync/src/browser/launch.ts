@@ -80,6 +80,18 @@ function systemBrowsers(): Array<{ nom: string; chemins: string[] }> {
   ];
 }
 
+/** Emplacements inspectes, pour qu'un echec soit diagnosticable. */
+export function inspectedPaths(): string[] {
+  const out: string[] = [];
+  if (process.env.SFS_CHROMIUM_PATH) out.push(`SFS_CHROMIUM_PATH=${process.env.SFS_CHROMIUM_PATH}`);
+  for (const navigateur of systemBrowsers()) {
+    for (const chemin of navigateur.chemins) {
+      if (chemin) out.push(`${navigateur.nom} : ${chemin}`);
+    }
+  }
+  return out;
+}
+
 export function resolveBrowser(): BrowserChoice | undefined {
   // 1. Un chemin impose a la main gagne toujours.
   const impose = process.env.SFS_CHROMIUM_PATH;
