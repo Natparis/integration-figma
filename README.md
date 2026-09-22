@@ -87,9 +87,12 @@ développeur devra reprendre à la main.
 
 Une seule fois, sur le poste qui pilotera la synchronisation :
 
-1. Figma (application de bureau) → menu **Plugins ▸ Développement ▸ Importer un
-   plugin depuis le manifeste…**
-2. choisissez `packages/figma-plugin/manifest.json`
+1. assurez-vous d'avoir lancé `npm run build` — le manifeste pointe vers
+   `dist/`, qui n'est pas versionné ;
+2. Figma (**application de bureau**, l'import de plugin n'existe pas dans le
+   navigateur) → menu **Plugins ▸ Développement ▸ Importer un plugin depuis le
+   manifeste…** ;
+3. choisissez `packages/figma-plugin/manifest.json`.
 
 ### 4. Synchroniser
 
