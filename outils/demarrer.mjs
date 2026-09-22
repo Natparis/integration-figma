@@ -45,6 +45,12 @@ function executer(commande, args, options = {}) {
       stdio: options.silencieux ? ['ignore', 'pipe', 'pipe'] : 'inherit',
       // Sous Windows, `npm` et `npx` sont des scripts : ils ont besoin du shell.
       shell: process.platform === 'win32',
+      env: {
+        ...process.env,
+        // Les avertissements de depreciation de Node n'appellent aucune action
+        // de la part de l'utilisatrice et noient les lignes qui comptent.
+        NODE_NO_WARNINGS: '1',
+      },
     });
     let sortie = '';
     if (options.silencieux) {
@@ -81,7 +87,9 @@ async function principal() {
     bien('Deja installees.');
   } else {
     info('Premiere installation — comptez une a deux minutes.');
-    const { code } = await executer('npm', ['install', '--no-audit', '--no-fund']);
+    const { code } = await executer('npm', [
+      'install', '--no-audit', '--no-fund', '--loglevel=error',
+    ]);
     if (code !== 0) {
       erreur("L'installation a echoue.");
       dire('');
@@ -116,7 +124,7 @@ async function principal() {
   } else {
     info('Telechargement de Chromium — environ 150 Mo, quelques minutes.');
     info('C est le navigateur qui visitera votre site pour le mesurer.');
-    const { code } = await executer('npx', ['playwright', 'install', 'chromium']);
+    const { code } = await executer('npx', ['--yes', 'playwright', 'install', 'chromium']);
     if (code !== 0) {
       erreur('Le telechargement de Chromium a echoue.');
       dire('    Verifiez votre connexion, puis relancez ce script.');
