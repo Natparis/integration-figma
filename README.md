@@ -250,12 +250,19 @@ développeur les ait sous les yeux.
   fois ; la capture est faite au repos.
 - **Animations et transitions** : neutralisées volontairement, pour mesurer
   l'état final et non une image intermédiaire.
+- **Vidéos** : rendues par **une image fixe extraite de la lecture** — celle que
+  voit le visiteur à cet instant. Le mouvement est à réimplémenter en code. Une
+  vidéo servie depuis un autre domaine sans en-tête CORS ne peut pas être
+  capturée : le navigateur l'interdit, et c'est signalé.
 - **Éléments collés** (`position: sticky` / `fixed`) : placés à leur position de
   repos, en couche absolue.
+- **Contenus repliés** (accordéons fermés, diapositives hors cadre) : **exclus**,
+  puisqu'ils ne sont pas visibles. La maquette montre l'état initial de la page,
+  comme un visiteur qui arrive dessus.
+- **Shadow DOM fermé** : inaccessible, même au navigateur qui l'affiche. Les
+  arbres ouverts sont parcourus normalement ; les fermés sont signalés.
 - **Grilles CSS à colonnes inégales** : rendues en auto-layout avec retour à la
   ligne ; les largeurs de colonnes sont à redéclarer en CSS.
-- **Contenus dynamiques** (carrousels, onglets, accordéons) : seul l'état initial
-  est capturé.
 - **`<canvas>`, `<iframe>`** : rendus comme boîtes vides — leur contenu n'est pas
   extractible.
 
@@ -277,7 +284,7 @@ Aucun service tiers n'est appelé.
 
 ```bash
 npm run build       # les trois paquets
-npm test            # 134 tests
+npm test            # 143 tests
 npm run typecheck
 npm run verify-colors   # compare le parseur de couleurs au rasteriseur de Chromium
 ```

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cas limites d'extraction</title>
+<!--
+  Page de test rassemblant les pieges rencontres sur un vrai site de production.
+  Chaque bloc a fait perdre du contenu dans une version anterieure de
+  l'extracteur ; ils sont ici pour que cela ne se reproduise pas.
+-->
+<style>
+  body { font-family: sans-serif; margin: 0; }
+  .entete-collee { position: fixed; top: 0; left: 0; right: 0; height: 64px;
+                   background: #111; color: #fff; padding: 20px; }
+  /* Ancetre qui masque le debordement : un element fixe doit lui echapper. */
+  .enveloppe-coupante { overflow: hidden; height: 200px; }
+  .panneau { max-height: 0; overflow: hidden; }
+  .ouvert .panneau { max-height: 600px; }
+  .carrousel { display: flex; gap: 16px; overflow: hidden; width: 420px; }
+  .carrousel > div { min-width: 320px; height: 120px; background: #eee; padding: 12px; }
+  .hors-ecran { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0px, 0px, 0px, 0px); }
+</style>
+</head>
+<body>
+  <div class="enveloppe-coupante">
+    <header class="entete-collee">ENTETE FIXE</header>
+  </div>
+
+  <site-entete></site-entete>
+
+  <main>
+    <p>CONTENU LUMIERE</p>
+
+    <section class="accordeon">
+      <div class="item ouvert">
+        <h3>Categorie ouverte</h3>
+        <div class="panneau"><p>PANNEAU OUVERT</p></div>
+      </div>
+      <div class="item">
+        <h3>Categorie fermee</h3>
+        <div class="panneau"><p>PANNEAU FERME</p></div>
+      </div>
+    </section>
+
+    <div class="carrousel">
+      <div>DIAPO VISIBLE</div>
+      <div>DIAPO PARTIELLE</div>
+      <div>DIAPO HORS CADRE</div>
+    </div>
+
+    <span class="hors-ecran">TEXTE MASQUE ACCESSIBLE</span>
+  </main>
+
+  <site-pied></site-pied>
+
+<script>
+  class Entete extends HTMLElement {
+    connectedCallback() {
+      const racine = this.attachShadow({ mode: 'open' });
+      racine.innerHTML =
+        '<nav style="padding:16px;background:#eee">' +
+        '<a href="/programmation">LIEN OMBRE</a>' +
+        '<h2>TITRE OMBRE</h2></nav>';
+    }
+  }
+  class Pied extends HTMLElement {
+    connectedCallback() {
+      const racine = this.attachShadow({ mode: 'open' });
+      racine.innerHTML =
+        '<footer style="padding:24px;background:#222;color:#fff">' +
+        '<p>PIED OMBRE</p></footer>';
+    }
+  }
+  class Ferme extends HTMLElement {
+    connectedCallback() {
+      // Arbre ferme : son contenu est inaccessible, meme a nous.
+      const racine = this.attachShadow({ mode: 'closed' });
+      racine.innerHTML = '<p>CONTENU INACCESSIBLE</p>';
+    }
+  }
+  customElements.define('site-entete', Entete);
+  customElements.define('site-pied', Pied);
+  customElements.define('bloc-ferme', Ferme);
+  document.body.appendChild(document.createElement('bloc-ferme'));
+</script>
+</body>
+</html>

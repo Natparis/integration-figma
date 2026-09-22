@@ -271,6 +271,8 @@ export function collectPage(options: CollectOptions): RawCapture {
   }
 
   const warnings: string[] = [];
+  let shadowRootsVisites = 0;
+  let shadowRootsFermes = 0;
   const fontUse = new Map<string, { family: string; weight: string; style: string; count: number }>();
   const links = new Set<string>();
   let visited = 0;
@@ -355,6 +357,45 @@ export function collectPage(options: CollectOptions): RawCapture {
     return seg;
   }
 
+  /**
+   * L'element est-il entierement decoupe par un ancetre qui masque son
+   * debordement ?
+   *
+   * C'est le mecanisme des accordeons et des panneaux repliables : le contenu
+   * reste dans le DOM, visible au sens de `display`, mais son conteneur a une
+   * hauteur nulle et `overflow: hidden`. Sans ce controle, une page dont tous
+   * les accordeons sont fermes arrive dans Figma entierement dépliée — ce qui ne
+   * correspond a rien de ce que voit le visiteur.
+   */
+  function clippedAway(el: Element, cs: CSSStyleDeclaration): boolean {
+    // Un element en position fixe est cale sur la fenetre : le debordement de
+    // ses ancetres ne le decoupe pas. C'est le cas d'un en-tete colle en haut de
+    // page — l'exclure par erreur le ferait disparaitre de la maquette.
+    if (cs.position === 'fixed') return false;
+
+    const own = el.getBoundingClientRect();
+    if (own.width <= 0 && own.height <= 0) return false;
+
+    let parent = el.parentElement;
+    let profondeur = 0;
+    while (parent && profondeur++ < 40) {
+      const pcs = getComputedStyle(parent);
+      const coupeX = pcs.overflowX === 'hidden' || pcs.overflowX === 'clip';
+      const coupeY = pcs.overflowY === 'hidden' || pcs.overflowY === 'clip';
+      if (coupeX || coupeY) {
+        const zone = parent.getBoundingClientRect();
+        // Un conteneur defilable montre son contenu : on ne coupe que sur les
+        // axes reellement masques.
+        const largeur = Math.min(own.right, zone.right) - Math.max(own.left, zone.left);
+        const hauteur = Math.min(own.bottom, zone.bottom) - Math.max(own.top, zone.top);
+        if (coupeY && hauteur <= 0.5) return true;
+        if (coupeX && largeur <= 0.5) return true;
+      }
+      parent = parent.parentElement;
+    }
+    return false;
+  }
+
   function isRendered(el: Element, cs: CSSStyleDeclaration, rect: RawRect): boolean {
     if (cs.display === 'none' || cs.visibility === 'hidden' || cs.visibility === 'collapse') {
       return false;
@@ -371,6 +412,8 @@ export function collectPage(options: CollectOptions): RawCapture {
       return false;
     }
     if (cs.clipPath === 'inset(50%)' || cs.clip === 'rect(0px, 0px, 0px, 0px)') return false;
+    // Contenu replié (accordeon, panneau ferme, diapositive hors cadre).
+    if (clippedAway(el, cs)) return false;
     return true;
   }
 
@@ -730,15 +773,69 @@ export function collectPage(options: CollectOptions): RawCapture {
     }
 
     if (el.tagName === 'VIDEO') {
-      const poster = (el as HTMLVideoElement).getAttribute('poster');
-      if (poster) {
-        node.images.unshift({
-          src: new URL(poster, document.baseURI).href,
-          naturalWidth: Math.round(rect.w),
-          naturalHeight: Math.round(rect.h),
-          alt: 'Affiche de la video',
-          origin: 'poster',
-        });
+      const video = el as HTMLVideoElement;
+
+      /*
+       * Une vidéo de fond ne peut pas entrer dans Figma. Mais laisser un cadre
+       * vide est bien pire : sur un site dont l'accueil est une vidéo plein
+       * écran, c'est tout le héros qui disparaît et la maquette devient
+       * méconnaissable.
+       *
+       * On capture donc l'image affichée à cet instant précis, en la peignant
+       * sur un canvas. C'est exactement ce que voit le visiteur.
+       */
+      let capturee = false;
+      if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+        try {
+          const canvas = document.createElement('canvas');
+          // 1600 px suffit largement pour une maquette, et borne le poids de
+          // l'image encodée en base64.
+          const largeur = Math.min(video.videoWidth, 1600);
+          canvas.width = largeur;
+          canvas.height = Math.max(1, Math.round((largeur * video.videoHeight) / video.videoWidth));
+          const contexte = canvas.getContext('2d');
+          if (contexte) {
+            contexte.drawImage(video, 0, 0, canvas.width, canvas.height);
+            // `toDataURL` échoue si la vidéo vient d'une autre origine sans
+            // CORS : le canvas est alors « teinté ». D'où le try/catch.
+            const donnees = canvas.toDataURL('image/jpeg', 0.85);
+            if (donnees.length > 100) {
+              node.images.unshift({
+                src: donnees,
+                naturalWidth: canvas.width,
+                naturalHeight: canvas.height,
+                alt: 'Image extraite de la video',
+                origin: 'poster',
+                objectFit: cs.objectFit,
+              });
+              capturee = true;
+              warnings.push(
+                'Une video a ete rendue par une image fixe extraite de sa lecture. Le mouvement est a re-implementer en code.',
+              );
+            }
+          }
+        } catch {
+          warnings.push(
+            "Une video d'une autre origine n'a pas pu etre capturee (restriction de securite du navigateur).",
+          );
+        }
+      }
+
+      if (!capturee) {
+        const poster = video.getAttribute('poster');
+        if (poster) {
+          node.images.unshift({
+            src: new URL(poster, document.baseURI).href,
+            naturalWidth: Math.round(rect.w),
+            naturalHeight: Math.round(rect.h),
+            alt: 'Affiche de la video',
+            origin: 'poster',
+          });
+        } else {
+          warnings.push(
+            "Une video sans image d'affiche laisse un cadre vide dans la maquette.",
+          );
+        }
       }
       return node;
     }
@@ -797,6 +894,31 @@ export function collectPage(options: CollectOptions): RawCapture {
     for (const child of Array.from(el.children)) {
       const built = walk(child, depth + 1);
       if (built) node.children.push(built);
+    }
+
+    /*
+     * Shadow DOM.
+     *
+     * Un site construit en Web Components place son contenu dans un arbre
+     * parallele, invisible depuis `element.children`. Sans cette descente, un
+     * composant `<mon-entete>` ne produit qu'un noeud vide : l'en-tete, le pied
+     * de page, voire des pages entieres disparaissent de la maquette sans le
+     * moindre message d'erreur.
+     *
+     * Seuls les arbres ouverts (`mode: 'open'`) sont accessibles ; un arbre
+     * ferme reste hors de portee, et on le signale.
+     */
+    const hote = el as Element & { shadowRoot?: ShadowRoot | null };
+    if (hote.shadowRoot) {
+      shadowRootsVisites++;
+      for (const child of Array.from(hote.shadowRoot.children)) {
+        const built = walk(child, depth + 1);
+        if (built) node.children.push(built);
+      }
+    } else if (el.tagName.includes('-') && el.children.length === 0 && !node.text) {
+      // Un element personnalise sans enfant ni texte : tres probablement un
+      // arbre ferme, dont le contenu est definitivement inaccessible.
+      shadowRootsFermes++;
     }
 
     // Texte nu melange a des blocs (`<div>Bonjour <section>...</section></div>`) :
@@ -917,6 +1039,14 @@ export function collectPage(options: CollectOptions): RawCapture {
 
   const rootVariables = readRootVariables();
   const root = walk(document.body, 0);
+
+  // Apres le parcours, pas avant : les compteurs ne sont renseignes que par
+  // `walk`. Les placer plus haut les lisait a zero.
+  if (shadowRootsFermes > 0) {
+    warnings.push(
+      `${shadowRootsFermes} composants utilisent un Shadow DOM ferme : leur contenu est inaccessible et manquera dans la maquette.`,
+    );
+  }
   if (!root) {
     throw new Error("Le <body> de la page n'a produit aucun noeud : page vide ou masquee.");
   }
@@ -949,7 +1079,7 @@ export function collectPage(options: CollectOptions): RawCapture {
     rootVariablesDeclared: rootVariables.declared,
     fonts: Array.from(fontUse.values()).sort((a, b) => b.count - a.count),
     links: Array.from(links),
-    stats: { visited, emitted, skipped, truncated },
+    stats: { visited, emitted, skipped, truncated, shadowRootsVisites, shadowRootsFermes },
     warnings: Array.from(new Set(warnings)),
   };
 }

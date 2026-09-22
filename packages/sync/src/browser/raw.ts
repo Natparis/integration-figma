@@ -131,6 +131,15 @@ export interface RawCapture {
   fonts: RawFontUse[];
   /** Liens sortants dans la meme origine, pour alimenter le crawl. */
   links: string[];
-  stats: { visited: number; emitted: number; skipped: number; truncated: boolean };
+  stats: {
+    visited: number;
+    emitted: number;
+    skipped: number;
+    truncated: boolean;
+    /** Arbres Shadow DOM ouverts et parcourus. */
+    shadowRootsVisites?: number;
+    /** Composants dont l'arbre est ferme, donc inaccessible. */
+    shadowRootsFermes?: number;
+  };
   warnings: string[];
 }

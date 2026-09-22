@@ -129,6 +129,7 @@ export async function capturePage(
     await page.evaluate(() => document.fonts.ready).catch(() => undefined);
 
     await revealAll(page);
+    await prepareVideos(page);
     await page.waitForTimeout(options.settleMs);
 
     const capture = await page.evaluate(collectPage, {
@@ -182,6 +183,45 @@ async function revealAll(page: Page): Promise<void> {
               }),
           ),
       ),
+    )
+    .catch(() => undefined);
+}
+
+/**
+ * Amene chaque video a l'etat ou une image peut en etre extraite.
+ *
+ * Sans cela, `readyState` vaut souvent 0 au moment de la mesure : le navigateur
+ * n'a pas encore decode la premiere image, et le collecteur ne trouve rien a
+ * peindre. On declenche donc la lecture en sourdine et on attend les donnees.
+ */
+async function prepareVideos(page: Page): Promise<void> {
+  await page
+    .evaluate(
+      () =>
+        Promise.all(
+          Array.from(document.querySelectorAll('video')).map(
+            (video) =>
+              new Promise<void>((resolve) => {
+                if (video.readyState >= 2) {
+                  resolve();
+                  return;
+                }
+                video.addEventListener('loadeddata', () => resolve(), { once: true });
+                video.addEventListener('error', () => resolve(), { once: true });
+                try {
+                  // En sourdine : seule condition pour que les navigateurs
+                  // autorisent une lecture non demandee par l'utilisateur.
+                  video.muted = true;
+                  video.preload = 'auto';
+                  void video.play().catch(() => undefined);
+                } catch {
+                  /* lecture refusee : on s'en remettra a l'image d'affiche */
+                }
+                // Une video qui ne charge pas ne doit pas bloquer l'extraction.
+                setTimeout(resolve, 6000);
+              }),
+          ),
+        ),
     )
     .catch(() => undefined);
 }
