@@ -103,9 +103,11 @@
           <small>Les motifs repetes du site, sur une page dediee.</small></span>
       </label>
       <label>
-        <input type="checkbox" id="annotate" checked>
-        <span>Annoter pour le Dev Mode
-          <small>Selecteur CSS et proprietes sur les couches structurantes.</small></span>
+        <input type="checkbox" id="annotate">
+        <span>Annoter visiblement pour le Dev Mode
+          <small>Pose des etiquettes sur les reperes de structure (en-tete, nav,
+          sections), 40 au maximum par page. Le selecteur CSS reste attache a
+          toutes les couches meme sans cette option.</small></span>
       </label>
     </div>
     <div style="margin-top:12px">
@@ -216,7 +218,7 @@
       if (s.onRemoved) $('onRemoved').value = s.onRemoved;
       $('skipUnchanged').checked = s.skipUnchanged !== false;
       $('createComponents').checked = s.createComponents !== false;
-      $('annotate').checked = s.annotate !== false;
+      $('annotate').checked = s.annotate === true;
       if (message.document && message.document.revision) {
         afficher(
           $('document'),

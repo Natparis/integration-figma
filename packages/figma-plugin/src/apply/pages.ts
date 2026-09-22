@@ -34,6 +34,8 @@ export async function syncPage(
   context: SyncContext,
 ): Promise<void> {
   const page = await ensurePage(pageSpec.name);
+  // Le plafond d'annotations s'applique par page, pas sur tout le document.
+  context.annotationCount = 0;
   page.setPluginData(SOURCE_KEY, pageSpec.route);
   page.setPluginData(REVISION_KEY, designSpec.revision);
 

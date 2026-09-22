@@ -33,7 +33,10 @@ const DEFAULT_SETTINGS: UiSettings = {
   onRemoved: 'archive',
   skipUnchanged: true,
   createComponents: true,
-  annotate: true,
+  // Desactive par defaut : sur un vrai site, les annotations visibles
+  // recouvraient le canevas au point de le rendre illisible. Les donnees
+  // restent attachees a chaque couche, annotation ou non.
+  annotate: false,
 };
 
 figma.showUI(__html__, { width: 460, height: 620, themeColors: true });

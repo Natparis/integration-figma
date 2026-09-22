@@ -60,6 +60,8 @@ export interface SyncContext {
   components: Map<string, ComponentNode | ComponentSetNode>;
   /** Nombre total d'echecs de dimensionnement, pour un compte-rendu honnete. */
   sizingFailures?: number;
+  /** Annotations posees sur la page courante, pour respecter le plafond. */
+  annotationCount?: number;
   /** Progression, remontee a l'interface. */
   report(step: string, progress: number): void;
 }
