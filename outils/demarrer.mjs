@@ -50,6 +50,7 @@ function executer(commande, args, options = {}) {
         // Les avertissements de depreciation de Node n'appellent aucune action
         // de la part de l'utilisatrice et noient les lignes qui comptent.
         NODE_NO_WARNINGS: '1',
+        ...(options.env ?? {}),
       },
     });
     let sortie = '';
@@ -113,24 +114,60 @@ async function principal() {
 
   /* --------------------------- 4. Navigateur ---------------------------- */
 
-  titre('4/6  Verification du navigateur de mesure');
-  const sonde = await executer(
-    process.execPath,
-    [path.join('packages', 'sync', 'dist', 'cli.js'), 'doctor'],
-    { silencieux: true },
-  );
-  if (/✓ Chromium/.test(sonde.sortie)) {
-    bien('Chromium est disponible.');
+  titre('4/6  Navigateur de mesure');
+  const cliSync = path.join('packages', 'sync', 'dist', 'cli.js');
+
+  /** Interroge `doctor` : quel navigateur est utilisable, s'il y en a un ? */
+  const chercherNavigateur = async () => {
+    const sonde = await executer(process.execPath, [cliSync, 'doctor'], { silencieux: true });
+    const ligne = /✓ (Chromium [^\n]*)/.exec(sonde.sortie);
+    return ligne ? ligne[1].trim() : null;
+  };
+
+  let navigateur = await chercherNavigateur();
+  if (navigateur) {
+    // Cas le plus frequent : Chrome ou Edge est deja installe. Rien a
+    // telecharger, et c'est tant mieux.
+    bien(navigateur);
   } else {
-    info('Telechargement de Chromium — environ 150 Mo, quelques minutes.');
+    info('Aucun navigateur detecte. Telechargement de Chromium — environ 150 Mo.');
     info('C est le navigateur qui visitera votre site pour le mesurer.');
-    const { code } = await executer('npx', ['--yes', 'playwright', 'install', 'chromium']);
-    if (code !== 0) {
-      erreur('Le telechargement de Chromium a echoue.');
-      dire('    Verifiez votre connexion, puis relancez ce script.');
+
+    // On utilise le Playwright DEJA installe dans le projet, et non `npx`, qui
+    // en telechargerait une seconde copie dans son propre cache.
+    const { code } = await executer(
+      process.execPath,
+      [path.join('node_modules', 'playwright-core', 'cli.js'), 'install', 'chromium'],
+      {
+        // 30 s par requete est trop court sur une connexion lente : c'est la
+        // cause la plus frequente d'echec de ce telechargement.
+        env: { PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: '180000' },
+      },
+    );
+
+    navigateur = code === 0 ? await chercherNavigateur() : null;
+    if (navigateur) {
+      bien(navigateur);
+    } else {
+      dire('');
+      erreur('Le telechargement du navigateur a echoue.');
+      dire('');
+      dire('    Cause la plus frequente : votre reseau bloque cdn.playwright.dev');
+      dire('    (pare-feu d entreprise, antivirus, ou connexion instable).');
+      dire('');
+      dire(peindre('    La solution la plus simple : installer Google Chrome.', 'gras'));
+      dire('    Ce logiciel sait s en servir directement, sans rien telecharger d autre.');
+      dire('');
+      dire('      https://www.google.com/intl/fr/chrome/');
+      dire('');
+      dire('    Microsoft Edge convient aussi, et il est deja sur tous les Windows.');
+      dire('    S il est installe sans etre trouve, indiquez son emplacement :');
+      dire('');
+      dire('      set SFS_CHROMIUM_PATH=C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe');
+      dire('      node outils\\demarrer.mjs');
+      dire('');
       return 1;
     }
-    bien('Chromium installe.');
   }
 
   /* -------------------------- 5. Configuration -------------------------- */

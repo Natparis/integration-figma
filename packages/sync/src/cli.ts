@@ -237,10 +237,15 @@ async function commandDoctor(
   if (nodeMajor < 20) problems++;
 
   try {
+    const { resolveBrowser } = await import('./browser/launch.js');
+    const choix = resolveBrowser();
     const browser = await launchBrowser();
     const version = browser.version();
     await browser.close();
-    report(true, `Chromium ${version}`, '');
+    report(true, `Chromium ${version} — ${choix?.nom ?? 'inconnu'}`, '');
+    if (choix?.origine === 'systeme') {
+      logger.plain(`      ${choix.executablePath}`);
+    }
   } catch (error) {
     problems++;
     report(
