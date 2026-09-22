@@ -1,0 +1,11 @@
+# Les scripts Windows doivent garder des fins de ligne CRLF, quel que soit le
+# systeme qui les modifie : avec des fins de ligne Unix, cmd.exe decoupe mal
+# chaque ligne et le script echoue de facon incomprehensible.
+*.bat text eol=crlf
+
+# Les scripts Unix, l'inverse.
+*.command text eol=lf
+*.sh      text eol=lf
+
+# Les fixtures de test sont volumineuses et illisibles dans un diff.
+packages/figma-plugin/test/fixtures/*.json -diff linguist-generated
