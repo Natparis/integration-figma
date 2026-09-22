@@ -394,3 +394,105 @@ test('les composants sont publies sur leur propre page', async () => {
     if (sid) assert.match(sid, /^component:/, `sid inattendu sur un composant : ${sid}`);
   }
 });
+
+/* ------------------- noeuds hors auto-layout (cas reel) -------------------- */
+
+/**
+ * Construit un spec minimal contenant le cas qui a echoue en production : un
+ * conteneur SANS auto-layout (enfants superposes, donc positionnement libre)
+ * dont les enfants n'ont pas d'auto-layout non plus.
+ *
+ * Figma refuse alors toute ecriture de `layoutSizing*`, y compris « fixe » et y
+ * compris sur un texte. Le site de demonstration ne produit aucun noeud de ce
+ * genre : sans ce test ecrit a la main, la regression repasserait.
+ */
+function specSansAutoLayout() {
+  const layout = (mode) => ({
+    mode,
+    wrap: false,
+    padding: [0, 0, 0, 0],
+    itemSpacing: 0,
+    counterAxisSpacing: 0,
+    primaryAxisAlignItems: 'MIN',
+    counterAxisAlignItems: 'MIN',
+    sizing: { horizontal: 'HUG', vertical: 'HUG' },
+    clipsContent: false,
+    positioning: 'AUTO',
+  });
+  const style = () => ({
+    fills: [], strokes: [], strokeWeight: 0, strokeAlign: 'INSIDE',
+    cornerRadius: [0, 0, 0, 0], effects: [], opacity: 1, visible: true,
+  });
+  const texte = (characters) => ({
+    characters,
+    font: {
+      family: 'Inter', style: 'Regular', weight: 400, italic: false, size: 16,
+      lineHeight: { unit: 'PIXELS', value: 24 },
+      letterSpacing: { unit: 'PIXELS', value: 0 },
+    },
+    fills: [{ type: 'SOLID', color: { r: 0, g: 0, b: 0 }, opacity: 1 }],
+    textAlignHorizontal: 'LEFT', textAlignVertical: 'TOP', textAutoResize: 'HEIGHT',
+    textDecoration: 'NONE', textCase: 'ORIGINAL', paragraphSpacing: 0,
+  });
+  const noeud = (sid, nom, kind, over = {}) => ({
+    sid, name: nom, kind,
+    box: { x: 0, y: 0, w: 200, h: 100 },
+    layout: layout('NONE'), style: style(), children: [],
+    hash: sid, subtreeHash: sid,
+    ...over,
+  });
+
+  // Conteneur en positionnement libre, avec deux enfants sans auto-layout :
+  // ni le parent ni les enfants ne peuvent recevoir de `layoutSizing`.
+  const libre = noeud('libre', 'Vitrine', 'FRAME', {
+    children: [
+      noeud('carte-joaillerie', 'Joaillerie', 'FRAME'),
+      noeud('carte-patisserie', 'Pâtisserie', 'FRAME'),
+      noeud('texte-libre', 'Légende', 'TEXT', { text: texte('Savoir-faire') }),
+    ],
+  });
+
+  const racine = noeud('root.desktop', 'Desktop · 1440px', 'FRAME', {
+    box: { x: 0, y: 0, w: 1440, h: 900 },
+    layout: { ...layout('VERTICAL'), sizing: { horizontal: 'FIXED', vertical: 'FIXED' } },
+    children: [libre],
+  });
+
+  return {
+    specVersion: 1,
+    revision: 'sans-auto-layout',
+    generatedAt: new Date().toISOString(),
+    source: {
+      kind: 'url', root: 'https://exemple.test/',
+      extractedAt: new Date().toISOString(), contentHash: 'x', extractorVersion: '0.1.0',
+    },
+    tokens: [], paintStyles: [], textStyles: [], effectStyles: [], components: [],
+    pages: [
+      {
+        name: 'Site / 01 · Test', route: '/', title: 'Test',
+        breakpoints: [{ name: 'Desktop', width: 1440, height: 900, root: racine }],
+      },
+    ],
+    assets: [], diagnostics: [],
+    stats: { pages: 1, breakpoints: 1, nodes: 5, textNodes: 1, assets: 0, variables: 0, components: 0 },
+  };
+}
+
+test('un conteneur sans auto-layout ne provoque aucun echec de dimensionnement', async () => {
+  // Releve en production : « Largeur de « Joaillerie » : node must be an
+  // auto-layout frame or a child of an auto-layout frame ». Figma impose cette
+  // condition pour TOUTES les valeurs, « fixe » comprise.
+  const { outcome } = await synchronise(specSansAutoLayout());
+  const echecs = outcome.warnings.filter((w) => /Largeur de|Hauteur de|dimensionnement/.test(w));
+  assert.deepEqual(echecs, [], echecs.join('\n'));
+  assert.ok(outcome.stats.created >= 4, `${outcome.stats.created} couches creees`);
+});
+
+test('les tailles restent correctes malgre l absence d auto-layout', async () => {
+  const { figma } = await synchronise(specSansAutoLayout());
+  const carte = findBySid(figma.root, 'carte-joaillerie');
+  assert.ok(carte, 'carte introuvable');
+  // `resize` a bien pose la taille, meme sans passer par layoutSizing.
+  assert.equal(carte.width, 200);
+  assert.equal(carte.height, 100);
+});

@@ -88,6 +88,12 @@ export async function syncSpec(
   figma.root.setPluginData(REVISION_KEY, spec.revision);
   figma.root.setPluginData(SOURCE_KEY, spec.source.root);
 
+  if (context.sizingFailures) {
+    context.warnings.push(
+      `${context.sizingFailures} couches n'ont pas pu recevoir leur mode de dimensionnement et gardent une taille fixe.`,
+    );
+  }
+
   const durationMs = Date.now() - started;
   const summary = {
     created: context.stats.created,

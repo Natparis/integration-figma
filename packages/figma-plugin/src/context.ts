@@ -58,6 +58,8 @@ export interface SyncContext {
   images: Map<string, Image>;
   /** Composants publies, par cle du spec. */
   components: Map<string, ComponentNode | ComponentSetNode>;
+  /** Nombre total d'echecs de dimensionnement, pour un compte-rendu honnete. */
+  sizingFailures?: number;
   /** Progression, remontee a l'interface. */
   report(step: string, progress: number): void;
 }

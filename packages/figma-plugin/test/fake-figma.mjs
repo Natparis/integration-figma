@@ -145,6 +145,19 @@ class FakeContainer extends FakeNode {
 }
 
 function assertSizing(node, value, axis) {
+  // Condition prealable du vrai Figma, valable pour TOUTES les valeurs, « fixe »
+  // comprise, et y compris sur un noeud texte. Relevee en production : elle
+  // manquait a ce faux moteur, qui validait donc du code que Figma refusait.
+  const parent = node.parent;
+  const parentEstAutoLayout =
+    parent !== null && parent !== undefined && 'layoutMode' in parent && parent.layoutMode !== 'NONE';
+  const soiEstAutoLayout = 'layoutMode' in node && node.layoutMode !== 'NONE';
+  if (!parentEstAutoLayout && !soiEstAutoLayout) {
+    throw new Error(
+      `in set_layoutSizing${axis === 'horizontal' ? 'Horizontal' : 'Vertical'}: node must be an auto-layout frame or a child of an auto-layout frame`,
+    );
+  }
+
   if (value === 'FILL') {
     const parent = node.parent;
     if (!parent || !('layoutMode' in parent) || parent.layoutMode === 'NONE') {

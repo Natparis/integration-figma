@@ -334,28 +334,49 @@ export function applySizing(node: SceneNode, spec: SpecNode, context: SyncContex
   const parent = node.parent;
   const parentIsAutoLayout =
     parent !== null && 'layoutMode' in parent && parent.layoutMode !== 'NONE';
+  const selfIsAutoLayout = 'layoutMode' in node && node.layoutMode !== 'NONE';
+
+  // Condition prealable de Figma, valable pour TOUTES les valeurs — y compris
+  // « fixe » et y compris sur un noeud texte : le noeud doit etre lui-meme en
+  // auto-layout, ou enfant d'un auto-layout. Ailleurs, la taille est simplement
+  // celle posee par `resize`, et toute tentative d'ecriture leve une exception.
+  if (!parentIsAutoLayout && !selfIsAutoLayout) return;
 
   const resolve = (mode: 'FIXED' | 'HUG' | 'FILL'): 'FIXED' | 'HUG' | 'FILL' => {
-    // Garde-fous : Figma leve une exception plutot que d'ignorer une valeur
-    // invalide, et une exception ici interromprait toute la synchronisation.
+    // « Remplir » suppose un parent en auto-layout, et n'a pas de sens pour un
+    // enfant place en absolu.
     if (mode === 'FILL' && (!parentIsAutoLayout || spec.layout.positioning === 'ABSOLUTE')) {
       return 'FIXED';
     }
-    if (mode === 'HUG' && node.type !== 'TEXT') {
-      if (!('layoutMode' in node) || node.layoutMode === 'NONE') return 'FIXED';
-    }
+    // « Ajuster » suppose un contenu a mesurer : un auto-layout propre, ou du texte.
+    if (mode === 'HUG' && node.type !== 'TEXT' && !selfIsAutoLayout) return 'FIXED';
     return mode;
   };
 
   try {
     node.layoutSizingHorizontal = resolve(spec.layout.sizing.horizontal);
   } catch (error) {
-    context.warnings.push(`Largeur de « ${spec.name} » : ${String(error)}`);
+    noteSizingFailure(context, `Largeur de « ${spec.name} » : ${String(error)}`);
   }
   try {
     node.layoutSizingVertical = resolve(spec.layout.sizing.vertical);
   } catch (error) {
-    context.warnings.push(`Hauteur de « ${spec.name} » : ${String(error)}`);
+    noteSizingFailure(context, `Hauteur de « ${spec.name} » : ${String(error)}`);
+  }
+}
+
+/**
+ * Regroupe les echecs de dimensionnement.
+ *
+ * Un defaut systematique produisait des centaines de lignes identiques qui
+ * noyaient les avertissements reellement distincts. On garde les premiers
+ * exemples, puis on compte.
+ */
+function noteSizingFailure(context: SyncContext, message: string): void {
+  context.sizingFailures = (context.sizingFailures ?? 0) + 1;
+  if (context.sizingFailures <= 5) context.warnings.push(message);
+  else if (context.sizingFailures === 6) {
+    context.warnings.push('… autres echecs de dimensionnement regroupes (voir le total en fin de rapport).');
   }
 }
 
