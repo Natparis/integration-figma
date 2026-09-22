@@ -41,7 +41,25 @@ l'on dépose dans l'interface du plugin.
 
 ---
 
-## Installation
+## Le plus simple : l'assistant de démarrage
+
+Si vous n'êtes pas à l'aise avec le terminal, tout est automatisé :
+
+| Votre système | Double-cliquez sur |
+|---------------|--------------------|
+| Windows       | `demarrer.bat`     |
+| macOS         | `demarrer.command` |
+
+L'assistant vérifie Node.js, installe ce qu'il faut, télécharge le navigateur de
+mesure, vous demande l'adresse de votre site et la clé de votre fichier Figma,
+lit le site, puis affiche la marche à suivre dans Figma. Il explique chaque
+échec en français.
+
+Le reste de cette page décrit les commandes manuelles, pour qui préfère.
+
+---
+
+## Installation manuelle
 
 Prérequis : **Node.js 20 ou supérieur**.
 

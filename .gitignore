@@ -1,4 +1,7 @@
 node_modules/
+
+# Configuration propre a chaque poste : le modele est sfs.config.example.json
+sfs.config.json
 dist/
 *.tsbuildinfo
 .sfs/
