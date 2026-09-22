@@ -1,0 +1,26 @@
+{
+  "name": "site-to-figma-sync",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Extrait un site web (export statique ou URL en ligne) et construit/met a jour un fichier Figma pret pour la passation a un developpeur.",
+  "workspaces": [
+    "packages/spec",
+    "packages/sync",
+    "packages/figma-plugin"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run build -w @sfs/spec && npm run build -w @sfs/sync && npm run build -w @sfs/figma-plugin",
+    "typecheck": "npm run typecheck -w @sfs/spec && npm run typecheck -w @sfs/sync && npm run typecheck -w @sfs/figma-plugin",
+    "test": "npm run test -w @sfs/spec && npm run test -w @sfs/sync && npm run test -w @sfs/figma-plugin",
+    "sfs": "node packages/sync/dist/cli.js",
+    "verify-colors": "npm run build -w @sfs/sync && node packages/sync/scripts/verify-colors-against-chromium.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2"
+  }
+}

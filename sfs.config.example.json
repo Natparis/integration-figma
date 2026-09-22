@@ -1,0 +1,32 @@
+{
+  "source": {
+    "path": "https://projet.exemple.fr/",
+    "entries": ["/"],
+    "exclude": [],
+    "maxPages": 40,
+    "settleMs": 400
+  },
+  "breakpoints": [
+    { "name": "Desktop", "width": 1440, "height": 1024 },
+    { "name": "Tablet", "width": 834, "height": 1112 },
+    { "name": "Mobile", "width": 390, "height": 844 }
+  ],
+  "figma": {
+    "fileKey": "",
+    "pagePrefix": "Site",
+    "componentsPage": "Composants",
+    "documentationPage": "Documentation"
+  },
+  "tokens": {
+    "useCssVariables": true,
+    "inferMissing": true,
+    "darkMode": true,
+    "themeAttribute": "data-theme",
+    "collectionName": "Design Tokens"
+  },
+  "components": { "enabled": true, "minOccurrences": 3 },
+  "output": { "dir": ".sfs", "devAnnotations": true, "pretty": false },
+  "relay": { "host": "127.0.0.1", "port": 7788 },
+  "sync": { "onRemoved": "archive" },
+  "logLevel": "info"
+}

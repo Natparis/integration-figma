@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+  /* Les variables `--figma-color-*` sont fournies par l'hote quand le plugin est
+     ouvert avec `themeColors: true` : l'interface suit le theme clair ou sombre
+     de Figma sans qu'on ait a le detecter. */
+  :root {
+    --fond: var(--figma-color-bg, #fff);
+    --fond-doux: var(--figma-color-bg-secondary, #f5f5f5);
+    --encre: var(--figma-color-text, #1e1e1e);
+    --encre-douce: var(--figma-color-text-secondary, #6b6b6b);
+    --bord: var(--figma-color-border, #e6e6e6);
+    --accent: var(--figma-color-bg-brand, #0d99ff);
+    --accent-encre: var(--figma-color-text-onbrand, #fff);
+    --danger: var(--figma-color-text-danger, #c4320a);
+    --succes: var(--figma-color-text-success, #0f7b34);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 11px/1.5 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--encre);
+    background: var(--fond);
+  }
+  main { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+  h1 { font-size: 13px; margin: 0; font-weight: 600; }
+  p.aide { margin: 0; color: var(--encre-douce); }
+  fieldset { border: 1px solid var(--bord); border-radius: 6px; padding: 12px; margin: 0; }
+  legend { padding: 0 6px; font-weight: 600; color: var(--encre-douce); }
+  label { display: block; margin-bottom: 6px; font-weight: 500; }
+  input[type="text"], select, textarea {
+    width: 100%; padding: 7px 8px; font: inherit; color: var(--encre);
+    background: var(--fond); border: 1px solid var(--bord); border-radius: 5px;
+  }
+  textarea { resize: vertical; min-height: 60px; font-family: ui-monospace, monospace; }
+  .ligne { display: flex; gap: 8px; align-items: flex-end; }
+  .ligne > :first-child { flex: 1; }
+  button {
+    font: inherit; font-weight: 600; padding: 8px 14px; border-radius: 6px;
+    border: 1px solid var(--bord); background: var(--fond); color: var(--encre); cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: var(--fond-doux); }
+  button.principal { background: var(--accent); color: var(--accent-encre); border-color: transparent; }
+  button.principal:hover:not(:disabled) { filter: brightness(1.08); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .cases { display: flex; flex-direction: column; gap: 8px; }
+  .cases label { display: flex; gap: 8px; align-items: flex-start; font-weight: 400; margin: 0; }
+  .cases input { margin: 2px 0 0; }
+  .cases span small { display: block; color: var(--encre-douce); }
+  .etat { padding: 10px; border-radius: 6px; background: var(--fond-doux); white-space: pre-wrap; }
+  .etat.erreur { color: var(--danger); }
+  .etat.ok { color: var(--succes); }
+  progress { width: 100%; height: 6px; }
+  #journal {
+    max-height: 150px; overflow-y: auto; font-family: ui-monospace, monospace;
+    font-size: 10px; color: var(--encre-douce); background: var(--fond-doux);
+    padding: 8px; border-radius: 6px; white-space: pre-wrap;
+  }
+  .masque { display: none; }
+  .pied { display: flex; gap: 8px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+<main>
+  <div>
+    <h1>Site → Figma Sync</h1>
+    <p class="aide">Construit et met a jour ce fichier a partir du design-spec extrait de votre site.</p>
+  </div>
+
+  <div id="document" class="etat masque"></div>
+
+  <fieldset>
+    <legend>Source</legend>
+    <div class="ligne">
+      <div>
+        <label for="relay">Relay local (commande <code>sfs serve</code>)</label>
+        <input type="text" id="relay" value="http://127.0.0.1:7788" spellcheck="false">
+      </div>
+      <button id="verifier" type="button">Verifier</button>
+    </div>
+    <div id="sante" class="etat masque" style="margin-top:10px"></div>
+
+    <div style="margin-top:12px">
+      <label for="fichier">Ou, sans serveur : deposez le fichier <code>design-spec.bundle.json</code></label>
+      <input type="file" id="fichier" accept="application/json,.json">
+      <p class="aide" id="fichier-etat"></p>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Options</legend>
+    <div class="cases">
+      <label>
+        <input type="checkbox" id="skipUnchanged" checked>
+        <span>Sauter les parties inchangees
+          <small>Bien plus rapide. Decochez pour tout reecrire.</small></span>
+      </label>
+      <label>
+        <input type="checkbox" id="createComponents" checked>
+        <span>Publier l'inventaire des composants
+          <small>Les motifs repetes du site, sur une page dediee.</small></span>
+      </label>
+      <label>
+        <input type="checkbox" id="annotate" checked>
+        <span>Annoter pour le Dev Mode
+          <small>Selecteur CSS et proprietes sur les couches structurantes.</small></span>
+      </label>
+    </div>
+    <div style="margin-top:12px">
+      <label for="onRemoved">Couches disparues du site</label>
+      <select id="onRemoved">
+        <option value="archive">Archiver dans une frame dediee (recommande)</option>
+        <option value="keep">Laisser en place</option>
+        <option value="delete">Supprimer</option>
+      </select>
+    </div>
+  </fieldset>
+
+  <div>
+    <button id="synchroniser" class="principal" type="button" style="width:100%">Synchroniser</button>
+    <progress id="progression" class="masque" max="1" value="0" style="margin-top:10px"></progress>
+    <div id="statut" class="etat masque" style="margin-top:10px"></div>
+    <div id="journal" class="masque" style="margin-top:10px"></div>
+  </div>
+
+  <div class="pied">
+    <button id="fermer" type="button">Fermer</button>
+  </div>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var specEnLigne = null;
+  var enCours = false;
+
+  function afficher(el, texte, classe) {
+    el.textContent = texte;
+    el.className = 'etat' + (classe ? ' ' + classe : '');
+  }
+
+  function envoyer(message) {
+    parent.postMessage({ pluginMessage: message }, '*');
+  }
+
+  function reglages() {
+    return {
+      relayUrl: $('relay').value.trim(),
+      onRemoved: $('onRemoved').value,
+      skipUnchanged: $('skipUnchanged').checked,
+      createComponents: $('createComponents').checked,
+      annotate: $('annotate').checked
+    };
+  }
+
+  $('verifier').onclick = function () {
+    afficher($('sante'), 'Verification…');
+    envoyer({ type: 'check', relayUrl: $('relay').value.trim() });
+  };
+
+  $('fichier').onchange = function (event) {
+    var fichier = event.target.files && event.target.files[0];
+    if (!fichier) return;
+    var lecteur = new FileReader();
+    lecteur.onload = function () {
+      specEnLigne = String(lecteur.result);
+      // Un controle immediat evite de decouvrir le probleme au milieu d'une
+      // ecriture dans le document.
+      try {
+        var parsed = JSON.parse(specEnLigne);
+        $('fichier-etat').textContent =
+          'Charge : revision ' + parsed.revision + ' — ' +
+          (parsed.stats ? parsed.stats.pages + ' pages, ' + parsed.stats.assets + ' assets' : '');
+      } catch (erreur) {
+        specEnLigne = null;
+        $('fichier-etat').textContent = 'Ce fichier n’est pas un design-spec valide.';
+      }
+    };
+    lecteur.readAsText(fichier);
+  };
+
+  $('synchroniser').onclick = function () {
+    if (enCours) return;
+    enCours = true;
+    $('synchroniser').disabled = true;
+    $('progression').classList.remove('masque');
+    $('progression').value = 0;
+    $('journal').classList.remove('masque');
+    $('journal').textContent = '';
+    afficher($('statut'), 'Demarrage…');
+    envoyer({
+      type: 'sync',
+      relayUrl: specEnLigne ? null : $('relay').value.trim(),
+      inlineSpec: specEnLigne,
+      settings: reglages(),
+      breakpoints: []
+    });
+  };
+
+  $('fermer').onclick = function () { envoyer({ type: 'close' }); };
+
+  function terminer() {
+    enCours = false;
+    $('synchroniser').disabled = false;
+  }
+
+  onmessage = function (event) {
+    var message = event.data.pluginMessage;
+    if (!message) return;
+
+    if (message.type === 'ready') {
+      var s = message.settings || {};
+      if (s.relayUrl) $('relay').value = s.relayUrl;
+      if (s.onRemoved) $('onRemoved').value = s.onRemoved;
+      $('skipUnchanged').checked = s.skipUnchanged !== false;
+      $('createComponents').checked = s.createComponents !== false;
+      $('annotate').checked = s.annotate !== false;
+      if (message.document && message.document.revision) {
+        afficher(
+          $('document'),
+          'Ce fichier porte deja la revision ' + message.document.revision +
+            (message.document.source ? '\nSource : ' + message.document.source : '') +
+            '\nUne nouvelle synchronisation mettra les couches a jour sur place.'
+        );
+        $('document').classList.remove('masque');
+      }
+      $('verifier').click();
+      return;
+    }
+
+    if (message.type === 'health') {
+      $('sante').classList.remove('masque');
+      if (message.ok) {
+        var h = message.health;
+        afficher(
+          $('sante'),
+          'Relay joignable.\nRevision ' + h.revision + ' — ' + h.pages + ' pages, ' + h.assets + ' assets.',
+          'ok'
+        );
+      } else {
+        afficher($('sante'), message.message, 'erreur');
+      }
+      return;
+    }
+
+    if (message.type === 'progress') {
+      $('progression').value = message.progress;
+      afficher($('statut'), message.step);
+      $('journal').textContent += message.step + '\n';
+      $('journal').scrollTop = $('journal').scrollHeight;
+      return;
+    }
+
+    if (message.type === 'done') {
+      $('progression').value = 1;
+      var st = message.stats;
+      afficher(
+        $('statut'),
+        'Termine en ' + (message.durationMs / 1000).toFixed(1) + ' s.\n' +
+          st.created + ' couches creees, ' + st.updated + ' mises a jour, ' +
+          st.skipped + ' inchangees, ' + st.removed + ' retirees.\n' +
+          st.variablesWritten + ' variables, ' + st.stylesWritten + ' styles, ' +
+          st.componentsWritten + ' composants, ' + st.assetsLoaded + ' assets.',
+        'ok'
+      );
+      if (message.warnings && message.warnings.length) {
+        $('journal').textContent += '\n— Avertissements —\n' + message.warnings.join('\n');
+        $('journal').scrollTop = $('journal').scrollHeight;
+      }
+      terminer();
+      return;
+    }
+
+    if (message.type === 'error') {
+      afficher($('statut'), message.message, 'erreur');
+      terminer();
+    }
+  };
+})();
+</script>
+</body>
+</html>

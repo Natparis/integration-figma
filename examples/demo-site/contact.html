@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contact — Les métiers d'expertise</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .formulaire { display: flex; flex-direction: column; gap: var(--space-4); max-width: 520px; }
+    .champ { display: flex; flex-direction: column; gap: var(--space-2); }
+    .champ label { font-size: 14px; font-weight: 600; }
+    .champ input, .champ textarea {
+      font-family: inherit; font-size: 15px; padding: var(--space-3);
+      border: 1px solid var(--color-neutral-300); border-radius: var(--radius-sm);
+      background: var(--color-surface); color: var(--color-text);
+    }
+  </style>
+</head>
+<body>
+  <header class="site-entete">
+    <div class="conteneur entete-barre">
+      <a class="logo" href="/">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true"><rect width="28" height="28" rx="8" fill="currentColor"/></svg>
+        Les métiers d'expertise
+      </a>
+      <nav class="navigation-principale" aria-label="Navigation principale">
+        <a href="/nos-metiers.html">Nos métiers</a>
+        <a href="/methode.html">Notre méthode</a>
+        <a href="/contact.html">Contact</a>
+      </nav>
+      <a class="bouton bouton-principal" href="/contact.html">Prendre rendez-vous</a>
+    </div>
+  </header>
+  <main class="section">
+    <div class="conteneur">
+      <div class="section-entete" style="text-align:left">
+        <h2>Écrivons-nous</h2>
+        <p>Nous répondons sous deux jours ouvrés.</p>
+      </div>
+      <form class="formulaire">
+        <div class="champ"><label for="nom">Votre nom</label><input id="nom" type="text" placeholder="Nathalie Vasseur"></div>
+        <div class="champ"><label for="courriel">Votre courriel</label><input id="courriel" type="email" placeholder="nathalie@exemple.fr"></div>
+        <div class="champ"><label for="message">Votre message</label><textarea id="message" rows="5" placeholder="Décrivez votre besoin en quelques lignes."></textarea></div>
+        <button class="bouton bouton-principal" type="submit">Envoyer le message</button>
+      </form>
+    </div>
+  </main>
+  <footer class="site-pied">
+    <div class="conteneur pied-colonnes">
+      <div><h4>Les métiers d'expertise</h4><p>12 rue des Artisans, 45000 Orléans</p></div>
+      <div><h4>Navigation</h4><ul><li><a href="/nos-metiers.html">Nos métiers</a></li><li><a href="/contact.html">Contact</a></li></ul></div>
+      <div><h4>Informations</h4><ul><li><a href="/mentions-legales.html">Mentions légales</a></li></ul></div>
+    </div>
+  </footer>
+</body>
+</html>

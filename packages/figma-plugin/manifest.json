@@ -1,0 +1,14 @@
+{
+  "name": "Site → Figma Sync",
+  "id": "site-to-figma-sync",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "capabilities": [],
+  "networkAccess": {
+    "allowedDomains": ["http://127.0.0.1:7788", "http://localhost:7788"],
+    "reasoning": "Lit le design-spec et les assets servis par le relay local du CLI. Aucune donnee ne quitte la machine."
+  }
+}

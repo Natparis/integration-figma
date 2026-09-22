@@ -1,0 +1,163 @@
+/* Feuille de style representative d un site genere par un outil de design :
+   tokens en :root, oklch, mode sombre, flex et grid. */
+:root {
+  --color-brand-50: oklch(0.97 0.02 250);
+  --color-brand-500: oklch(0.62 0.17 250);
+  --color-brand-600: oklch(0.55 0.18 250);
+  --color-brand-700: oklch(0.47 0.16 250);
+  --color-neutral-0: #ffffff;
+  --color-neutral-100: oklch(0.97 0.004 264);
+  --color-neutral-300: oklch(0.87 0.008 264);
+  --color-neutral-600: oklch(0.55 0.02 264);
+  --color-neutral-900: oklch(0.21 0.034 264.665);
+  --color-accent-500: oklch(0.72 0.19 55);
+  --color-surface: var(--color-neutral-0);
+  --color-text: var(--color-neutral-900);
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-20: 80px;
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 999px;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-serif: "Source Serif 4", Georgia, serif;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06), 0 4px 12px rgba(16, 24, 40, 0.08);
+  --shadow-lifted: 0 8px 24px rgba(16, 24, 40, 0.12);
+  --max-width: 1140px;
+}
+
+:root[data-theme="dark"] {
+  --color-surface: oklch(0.21 0.034 264.665);
+  --color-text: oklch(0.97 0.004 264);
+  --color-neutral-100: oklch(0.27 0.03 264);
+  --color-neutral-300: oklch(0.38 0.03 264);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-surface);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.conteneur {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding-left: var(--space-6);
+  padding-right: var(--space-6);
+}
+
+/* ---------------------------- en-tete ---------------------------- */
+.site-entete {
+  position: sticky;
+  top: 0;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-neutral-300);
+  z-index: 10;
+}
+.entete-barre {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding-top: var(--space-4);
+  padding-bottom: var(--space-4);
+}
+.logo { display: flex; align-items: center; gap: var(--space-2); font-weight: 700; font-size: 18px; text-decoration: none; color: var(--color-text); }
+.navigation-principale { display: flex; align-items: center; gap: var(--space-6); }
+.navigation-principale a { color: var(--color-neutral-600); text-decoration: none; font-size: 15px; font-weight: 500; }
+.navigation-principale a:hover { color: var(--color-brand-600); }
+
+.bouton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-full);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.bouton-principal { background: var(--color-brand-600); color: #fff; }
+.bouton-secondaire { background: transparent; color: var(--color-brand-600); border-color: var(--color-brand-600); }
+
+/* ---------------------------- heros ------------------------------ */
+.heros {
+  padding-top: var(--space-20);
+  padding-bottom: var(--space-20);
+  background: linear-gradient(160deg, var(--color-brand-50) 0%, var(--color-surface) 70%);
+}
+.heros-grille { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: var(--space-12); align-items: center; }
+.heros h1 { font-family: var(--font-serif); font-size: 52px; line-height: 1.1; margin: 0 0 var(--space-6); letter-spacing: -0.02em; }
+.heros p.chapeau { font-size: 19px; color: var(--color-neutral-600); margin: 0 0 var(--space-8); }
+.heros-actions { display: flex; gap: var(--space-4); flex-wrap: wrap; }
+.heros-visuel { border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-lifted); }
+.heros-visuel img { width: 100%; height: 320px; object-fit: cover; display: block; }
+
+/* ---------------------------- metiers ---------------------------- */
+.section { padding-top: var(--space-20); padding-bottom: var(--space-20); }
+.section-entete { text-align: center; margin-bottom: var(--space-12); }
+.section-entete h2 { font-family: var(--font-serif); font-size: 38px; margin: 0 0 var(--space-3); letter-spacing: -0.01em; }
+.section-entete p { color: var(--color-neutral-600); font-size: 17px; margin: 0; }
+
+.grille-metiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-6); }
+.carte-metier {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-8);
+  background: var(--color-neutral-0);
+  border: 1px solid var(--color-neutral-300);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+.carte-metier .pastille {
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--color-brand-50);
+  border-radius: var(--radius-full);
+  color: var(--color-brand-600);
+}
+.carte-metier h3 { font-size: 20px; margin: 0; }
+.carte-metier p { color: var(--color-neutral-600); font-size: 15px; margin: 0; }
+.carte-metier .lien-carte { color: var(--color-brand-600); font-weight: 600; font-size: 15px; text-decoration: none; margin-top: auto; }
+
+/* ---------------------------- chiffres --------------------------- */
+.bandeau-chiffres { background: var(--color-neutral-900); color: #fff; padding-top: var(--space-12); padding-bottom: var(--space-12); }
+.chiffres { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-6); text-align: center; }
+.chiffre .valeur { font-family: var(--font-serif); font-size: 40px; font-weight: 700; display: block; }
+.chiffre .libelle { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.75; }
+
+/* ---------------------------- pied ------------------------------- */
+.site-pied { background: var(--color-neutral-100); padding-top: var(--space-12); padding-bottom: var(--space-12); font-size: 14px; color: var(--color-neutral-600); }
+.pied-colonnes { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: var(--space-8); }
+.pied-colonnes h4 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 var(--space-3); color: var(--color-text); }
+.pied-colonnes ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.pied-colonnes a { color: var(--color-neutral-600); text-decoration: none; }
+
+/* ---------------------------- adaptatif -------------------------- */
+@media (max-width: 900px) {
+  .heros-grille { grid-template-columns: 1fr; }
+  .grille-metiers { grid-template-columns: repeat(2, 1fr); }
+  .chiffres { grid-template-columns: repeat(2, 1fr); }
+  .heros h1 { font-size: 40px; }
+}
+@media (max-width: 640px) {
+  .navigation-principale { display: none; }
+  .grille-metiers { grid-template-columns: 1fr; }
+  .pied-colonnes { grid-template-columns: 1fr; }
+  .heros h1 { font-size: 32px; }
+  .section { padding-top: var(--space-12); padding-bottom: var(--space-12); }
+}
