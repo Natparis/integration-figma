@@ -23,6 +23,15 @@
   .titre-decoupe { font-size: 40px; margin: 24px 0; }
   .titre-decoupe .lettre { display: inline-block; }
   .badge { display: inline-block; background: #c00; color: #fff; padding: 2px 8px; border-radius: 4px; }
+  .cadre-centre { position: relative; height: 160px; background: #111; }
+  .badge-centre {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    background: #fff; color: #111; padding: 12px 20px; font-size: 12px;
+    letter-spacing: .12em; white-space: nowrap;
+  }
+  .chiffres-animes { display: flex; gap: 48px; padding: 40px 24px; background: #fafafa; }
+  .chiffre b { display: block; font-size: 34px; }
+  .chiffre span { font-size: 11px; letter-spacing: .1em; color: #666; }
 </style>
 </head>
 <body>
@@ -66,6 +75,25 @@
 
     <!-- Contre-exemple : un badge `inline-block` AVEC un fond reste une boite. -->
     <p class="avec-badge">Atelier <span class="badge">COMPLET</span> ce jour-la</p>
+    <!--
+      Apparition au defilement pilotee en JavaScript, restee en vol : c'est le
+      cas que le gel des animations CSS ne peut pas couvrir. La boite mesuree
+      commence alors AVANT le bord gauche et son premier mot est coupe.
+    -->
+    <section class="chiffres-animes">
+      <div class="chiffre"><b>Mars 2027</b><span>12 MARS · PARIS</span></div>
+      <div class="chiffre"><b>50+</b><span>ATELIERS IMMERSIFS</span></div>
+      <div class="chiffre"><b>20</b><span>MAISONS DU GROUPE</span></div>
+    </section>
+
+    <!--
+      Centrage legitime par transformation : `position: absolute` + translate.
+      Le menage des apparitions ne doit PAS y toucher, sinon le badge saute au
+      coin de son conteneur.
+    -->
+    <section class="cadre-centre">
+      <div class="badge-centre">CENTRE PAR TRANSFORMATION</div>
+    </section>
   </main>
 
   <site-pied></site-pied>
@@ -95,6 +123,10 @@
       racine.innerHTML = '<p>CONTENU INACCESSIBLE</p>';
     }
   }
+  // Reveal jamais acheve : la bibliotheque a pose la transformation de depart
+  // et l'observateur qui devait la retirer ne s'est pas declenche.
+  document.querySelector('.chiffres-animes').style.transform = 'translateX(-62px)';
+
   customElements.define('site-entete', Entete);
   customElements.define('site-pied', Pied);
   customElements.define('bloc-ferme', Ferme);

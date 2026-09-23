@@ -111,6 +111,22 @@ C'est le moyen le plus rapide de juger la fidélité — et il sépare deux ques
 qu'on confond sinon : *l'outil lit-il mal le site*, ou *écrit-il mal dans
 Figma* ? Un écart visible dans ce rapport se retrouvera dans Figma.
 
+Sous chaque comparaison, le **relevé de lecture** répond à la question que la
+comparaison laisse ouverte : quand un élément manque à droite, qu'est-ce qui l'a
+écarté ? Il liste, nommés et mesurés :
+
+| Rubrique | Ce qu'elle signale |
+| --- | --- |
+| Écartés | éléments présents dans la page, absents de la maquette, avec le motif (`display: none`, replié dans un parent à débordement masqué…) |
+| Décalés | éléments mesurés pendant qu'une animation les déplaçait encore |
+| Calés sur la fenêtre | en-têtes et bandeaux fixes, remontés à la racine de la frame |
+| Hors cadre | boîtes qui commencent avant `0` ou dépassent à droite — elles seront coupées |
+| Chevauchements | voisins qui se recouvrent dans une pile verticale : une hauteur a été sous-estimée |
+
+Le même relevé est écrit en texte brut dans `.sfs/releve.txt`, pour être collé
+tel quel dans un message : un diagnostic se transmet mieux en texte qu'en
+capture d'écran.
+
 ### 3. Installer le plugin dans Figma
 
 Une seule fois, sur le poste qui pilotera la synchronisation :

@@ -97,6 +97,26 @@ export interface RawNode {
   children: RawNode[];
 }
 
+/** Un element que le collecteur n'a pas emis. */
+export interface RawDiscard {
+  /** `tag.classe1.classe2`, tronque : de quoi le reconnaitre dans le code. */
+  what: string;
+  rect: RawRect;
+  /** Motif lisible : « replie », « invisible », « transparent »… */
+  reason: string;
+  /** Debut du texte perdu, s'il y en avait. */
+  text?: string;
+}
+
+/** Un element mesure alors qu'une transformation CSS le decalait. */
+export interface RawShift {
+  what: string;
+  rect: RawRect;
+  /** Decalage horizontal et vertical impose par `transform`, en pixels. */
+  dx: number;
+  dy: number;
+}
+
 export interface RawFontUse {
   family: string;
   weight: string;
@@ -131,6 +151,20 @@ export interface RawCapture {
   fonts: RawFontUse[];
   /** Liens sortants dans la meme origine, pour alimenter le crawl. */
   links: string[];
+  /**
+   * Ce que le collecteur a ECARTE, et pourquoi.
+   *
+   * Un element absent de la maquette ne laisse aucune trace : on ne peut ni le
+   * voir ni le nommer. Ce releve est la seule facon de repondre a « pourquoi le
+   * heros a-t-il disparu ? » sans avoir la page sous les yeux.
+   */
+  discards?: RawDiscard[];
+  /**
+   * Elements conserves mais DEPLACES par une transformation CSS au moment de la
+   * mesure : une apparition au defilement encore en vol decale la boite reelle,
+   * et Figma heriterait de ce decalage.
+   */
+  shifted?: RawShift[];
   stats: {
     visited: number;
     emitted: number;

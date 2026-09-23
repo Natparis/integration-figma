@@ -89,3 +89,55 @@ test('le corps de page reste le premier enfant, en pleine largeur', async () => 
   assert.equal(corps.layout.sizing.horizontal, 'FILL');
   assert.equal(corps.layout.sizing.vertical, 'HUG');
 });
+
+/** Cherche le premier noeud dont le nom correspond. */
+function trouverParNom(racine: SpecNode, motif: RegExp): SpecNode | null {
+  if (motif.test(racine.name)) return racine;
+  for (const enfant of racine.children) {
+    const trouve = trouverParNom(enfant, motif);
+    if (trouve) return trouve;
+  }
+  return null;
+}
+
+test('une apparition restee en vol est reposee avant la mesure', async () => {
+  // La bibliotheque d'animation avait pose `translateX(-62px)` et n'est jamais
+  // venue le retirer. Mesure telle quelle, la rangee commencait 62 px avant le
+  // bord gauche : dans Figma, « Mars 2027 » perdait ses premieres lettres.
+  const racine = await extraire();
+
+  const rangee = trouverParNom(racine, /Chiffres animes/i);
+  assert.ok(rangee, 'la rangee de chiffres est absente de la maquette');
+  assert.ok(
+    rangee!.box.x >= 0,
+    `la rangee commence a x = ${rangee!.box.x}, donc avant le bord gauche du cadre`,
+  );
+
+  const premier = trouverParNom(racine, /^Chiffre 1$/i);
+  assert.ok(premier, 'le premier chiffre est absent');
+  assert.ok(
+    premier!.box.x >= 0,
+    `« Mars 2027 » commence a x = ${premier!.box.x} : son debut sera coupe`,
+  );
+});
+
+test('un centrage par transformation n est pas defait', async () => {
+  // Le menage des apparitions ne vise que les translations EN LIGNE sur des
+  // elements dans le flux. Le centrage `position: absolute` + `translate(-50%,
+  // -50%)` ecrit dans la feuille de style doit survivre intact, sans quoi tout
+  // badge centre sauterait au coin de son conteneur.
+  const racine = await extraire();
+
+  const badge = trouverParNom(racine, /^Badge centre$/i);
+  assert.ok(badge, 'le badge centre est absent de la maquette');
+
+  const cadre = trouverParNom(racine, /^Cadre centre$/i);
+  assert.ok(cadre, 'le conteneur du badge est absent');
+
+  const centreBadge = badge!.box.x + badge!.box.w / 2;
+  const centreCadre = cadre!.box.x + cadre!.box.w / 2;
+  assert.ok(
+    Math.abs(centreBadge - centreCadre) <= 2,
+    `badge centre en ${centreBadge}, conteneur centre en ${centreCadre}`,
+  );
+});

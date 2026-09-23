@@ -346,6 +346,13 @@ async function lancer(config) {
   dire('     Il montre, cote a cote, votre site et ce que l outil en a compris.');
   dire('     Un ecart visible ici se retrouvera dans Figma : autant le voir tout de suite.');
   dire('');
+  dire('     Et si quelque chose manque, ce fichier texte dit quoi, et pourquoi :');
+  dire('');
+  dire('       ' + peindre(path.join(RACINE, config.output?.dir ?? '.sfs', 'releve.txt'), 'bleu'));
+  dire('');
+  dire('     Ouvrez-le avec le Bloc-notes, selectionnez tout (Ctrl + A), copiez');
+  dire('     (Ctrl + C), et collez-le-moi dans un message : c est court et complet.');
+  dire('');
   dire(peindre('  ══ Puis, deux gestes dans Figma. ══', 'gras'));
   dire('');
   dire('  A) Importer le plugin — une seule fois, jamais a refaire :');

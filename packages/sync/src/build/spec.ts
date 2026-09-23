@@ -31,6 +31,7 @@ import { detectComponents } from './components.js';
 import { buildNode, finalizeHashes } from './tree.js';
 import { pageName } from './naming.js';
 import type { Logger } from '../logger.js';
+import { construireReleve, releveVide } from './releve.js';
 
 export const EXTRACTOR_VERSION = '0.1.0';
 
@@ -291,6 +292,8 @@ export async function extract(config: SfsConfig, log: Logger): Promise<ExtractRe
         };
         const capturePng = screenshots.get(`${page.route}|${breakpoint.name}`);
         if (capturePng) bp.screenshot = capturePng;
+        const releve = construireReleve(root, capture, breakpoint.width);
+        if (!releveVide(releve)) bp.releve = releve;
         breakpoints.push(bp);
       }
       if (breakpoints.length === 0) return;

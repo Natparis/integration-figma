@@ -317,6 +317,8 @@ async function commandExtract(config: SfsConfig, log: Logger): Promise<number> {
     const rapport = await ecrireRapport(outputDir);
     log.success(`Comparaison : ${rapport.fichier}`);
     log.plain('   Ouvrez ce fichier pour voir, cote a cote, votre site et ce qui en a ete compris.');
+    log.success(`Releve : ${rapport.fichierTexte}`);
+    log.plain('   Le meme diagnostic en texte : il se copie entierement dans un message.');
   } catch (error) {
     log.warn(`Rapport de comparaison non produit : ${error instanceof Error ? error.message : String(error)}`);
   }

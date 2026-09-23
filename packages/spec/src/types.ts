@@ -232,6 +232,34 @@ export interface BreakpointSpec {
    * que l'extracteur a compris.
    */
   screenshot?: string;
+  /**
+   * Ce que la lecture de la page a laisse de cote, et ce qu'elle a mesure de
+   * travers. Sans ce releve, un element absent de la maquette est muet : on ne
+   * peut ni le nommer ni savoir quelle regle l'a ecarte.
+   */
+  releve?: ReleveSpec;
+}
+
+/** Releve de diagnostic attache a une largeur d'ecran. */
+export interface ReleveSpec {
+  /** Elements non emis, les plus grands d'abord. */
+  ecartes: Array<{
+    what: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    reason: string;
+    text?: string;
+  }>;
+  /** Elements mesures alors qu'une transformation CSS les decalait. */
+  decales: Array<{ what: string; x: number; y: number; w: number; h: number; dx: number; dy: number }>;
+  /** Noeuds cales sur la fenetre, remontes a la racine de la frame. */
+  cales: Array<{ name: string; x: number; y: number; w: number; h: number }>;
+  /** Noeuds dont la boite sort du cadre de la page. */
+  horsCadre: Array<{ name: string; x: number; y: number; w: number; h: number }>;
+  /** Freres qui se chevauchent dans une pile verticale : lignes ecrasees. */
+  chevauchements: Array<{ name: string; voisin: string; y: number; recouvrement: number }>;
 }
 
 export interface PageSpec {

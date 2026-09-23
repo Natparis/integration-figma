@@ -10,7 +10,16 @@
  * Figma qui correspond a ce que le visiteur voit.
  */
 
-import type { RawCapture, RawDeclared, RawNode, RawRect, RawSegment, RawTextRun } from './raw.js';
+import type {
+  RawCapture,
+  RawDeclared,
+  RawDiscard,
+  RawNode,
+  RawRect,
+  RawSegment,
+  RawShift,
+  RawTextRun,
+} from './raw.js';
 
 export interface CollectOptions {
   /** Plafond de noeuds emis, garde-fou contre une page pathologique. */
@@ -410,25 +419,37 @@ export function collectPage(options: CollectOptions): RawCapture {
     return false;
   }
 
-  function isRendered(el: Element, cs: CSSStyleDeclaration, rect: RawRect): boolean {
-    if (cs.display === 'none' || cs.visibility === 'hidden' || cs.visibility === 'collapse') {
-      return false;
-    }
-    if (parseFloat(cs.opacity || '1') === 0) return false;
+  /**
+   * Rend le MOTIF du rejet, ou `null` si l'element doit etre emis.
+   *
+   * Un booleen suffisait tant qu'on ne demandait pas de comptes. Des lors qu'un
+   * element manque dans Figma, la seule question utile est « pourquoi ? » : le
+   * motif est donc produit ici, la ou la decision est prise.
+   */
+  function raisonNonRendu(
+    el: Element,
+    cs: CSSStyleDeclaration,
+    rect: RawRect,
+  ): string | null {
+    if (cs.display === 'none') return 'display: none';
+    if (cs.visibility === 'hidden' || cs.visibility === 'collapse') return 'visibility: hidden';
+    if (parseFloat(cs.opacity || '1') === 0) return 'opacity: 0';
     if (rect.w <= 0 && rect.h <= 0) {
       // Un conteneur a taille nulle peut malgre tout contenir du contenu
       // deborde (rare mais reel) : on le garde s'il a des enfants rendus.
-      return el.children.length > 0;
+      return el.children.length > 0 ? null : 'taille nulle';
     }
     // Technique de masquage accessible courante : on ne veut pas de ce texte
     // au milieu de la maquette.
     if (rect.w <= 1 && rect.h <= 1 && (cs.position === 'absolute' || cs.position === 'fixed')) {
-      return false;
+      return 'masque accessible (1 px)';
     }
-    if (cs.clipPath === 'inset(50%)' || cs.clip === 'rect(0px, 0px, 0px, 0px)') return false;
+    if (cs.clipPath === 'inset(50%)' || cs.clip === 'rect(0px, 0px, 0px, 0px)') {
+      return 'decoupe a zero';
+    }
     // Contenu replié (accordeon, panneau ferme, diapositive hors cadre).
-    if (clippedAway(el, cs)) return false;
-    return true;
+    if (clippedAway(el, cs)) return 'replie dans un parent a debordement masque';
+    return null;
   }
 
   /* --------------------------- texte et runs --------------------------- */
@@ -730,6 +751,63 @@ export function collectPage(options: CollectOptions): RawCapture {
     return node;
   }
 
+  /* ------------------------------- releves ----------------------------- */
+
+  const rejets: RawDiscard[] = [];
+  const decales: RawShift[] = [];
+
+  /** `section.hero` : court, mais suffisant pour retrouver l'element. */
+  function decrire(el: Element): string {
+    const cls = Array.from(el.classList)
+      .filter((c) => !/^(ng|css|sc|jsx|svelte|v)-[a-z0-9]{4,}$/i.test(c))
+      .slice(0, 2)
+      .join('.');
+    return el.tagName.toLowerCase() + (cls ? `.${cls}` : '');
+  }
+
+  /**
+   * Retient un rejet s'il est SIGNIFICATIF : assez grand pour se voir, ou
+   * porteur de texte. Les milliers de pixels d'icones masquees n'apprennent
+   * rien ; un heros de 1440x800 disparu, si.
+   */
+  function noterRejet(el: Element, rect: RawRect, reason: string): void {
+    if (rejets.length >= 400) return;
+    const texte = (el.textContent ?? '').trim().replace(/\s+/g, ' ');
+    const grand = rect.w >= 60 && rect.h >= 30;
+    if (!grand && texte.length === 0) return;
+    rejets.push({
+      what: decrire(el),
+      rect,
+      reason,
+      ...(texte ? { text: texte.slice(0, 80) } : {}),
+    });
+  }
+
+  /**
+   * Une transformation encore active au moment de la mesure decale la boite :
+   * `getBoundingClientRect` rend la position TRANSFORMEE. Une apparition au
+   * defilement pilotee en JavaScript echappe au gel des animations CSS, et la
+   * maquette herite alors du decalage. On le releve pour pouvoir le dire.
+   */
+  function noterDecalage(el: Element, cs: CSSStyleDeclaration, rect: RawRect): void {
+    if (decales.length >= 200) return;
+    const t = cs.transform;
+    if (!t || t === 'none') return;
+    const nombres = t.slice(t.indexOf('(') + 1, -1).split(',').map((n) => parseFloat(n));
+    // matrix(a,b,c,d,tx,ty) ou matrix3d(...) : la translation est en 5e/6e
+    // position, ou en 13e/14e pour la forme 3D.
+    const [dx, dy] = nombres.length >= 16 ? [nombres[12], nombres[13]] : [nombres[4], nombres[5]];
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+    if (Math.abs(dx!) < 2 && Math.abs(dy!) < 2) return;
+    if (rect.w < 40 && rect.h < 20) return;
+    decales.push({
+      what: decrire(el),
+      rect,
+      dx: Math.round(dx! * 10) / 10,
+      dy: Math.round(dy! * 10) / 10,
+    });
+  }
+
   /* ------------------------------ parcours ----------------------------- */
 
   function walk(el: Element, depth: number): RawNode | null {
@@ -749,10 +827,13 @@ export function collectPage(options: CollectOptions): RawCapture {
 
     const cs = getComputedStyle(el);
     const rect = docRect(el);
-    if (!isRendered(el, cs, rect)) {
+    const raison = raisonNonRendu(el, cs, rect);
+    if (raison !== null) {
       skipped++;
+      noterRejet(el, rect, raison);
       return null;
     }
+    noterDecalage(el, cs, rect);
 
     const node: RawNode = {
       seg: segmentOf(el),
@@ -1169,6 +1250,9 @@ export function collectPage(options: CollectOptions): RawCapture {
     rootVariablesDeclared: rootVariables.declared,
     fonts: Array.from(fontUse.values()).sort((a, b) => b.count - a.count),
     links: Array.from(links),
+    // Les plus grands d'abord : c'est ce qui manque le plus a l'oeil.
+    discards: rejets.sort((a, b) => b.rect.w * b.rect.h - a.rect.w * a.rect.h).slice(0, 40),
+    shifted: decales.sort((a, b) => b.rect.w * b.rect.h - a.rect.w * a.rect.h).slice(0, 25),
     stats: { visited, emitted, skipped, truncated, shadowRootsVisites, shadowRootsFermes },
     warnings: Array.from(new Set(warnings)),
   };

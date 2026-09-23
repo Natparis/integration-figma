@@ -135,6 +135,8 @@ export async function capturePage(
     await revealAll(page);
     await prepareVideos(page);
     await page.waitForTimeout(options.settleMs);
+    await attendreImmobilite(page);
+    await neutraliserRevelations(page);
 
     const capture = await page.evaluate(collectPage, {
       maxNodes: options.maxNodes,
@@ -169,6 +171,103 @@ export async function capturePage(
   } finally {
     await page.close();
   }
+}
+
+/**
+ * Repose les elements restes en position d'apparition.
+ *
+ * Une apparition au defilement part d'un decalage (`translateX(-60px)`) que la
+ * bibliotheque retire quand l'element entre dans le champ. Si l'observateur ne
+ * s'est jamais declenche — element dans un conteneur a defilement horizontal,
+ * seuil jamais atteint — le decalage reste. `getBoundingClientRect` rend alors
+ * une position fausse : le bloc commence avant le bord gauche et son premier mot
+ * est ampute dans la maquette.
+ *
+ * On ne retire que ce qui ne peut pas etre une mise en page :
+ *
+ *   · une transformation ECRITE EN LIGNE — le CSS d'auteur est laisse intact ;
+ *   · une TRANSLATION PURE — ni rotation, ni echelle, ni inclinaison ;
+ *   · sur un element DANS LE FLUX — le centrage par `translate(-50%, -50%)`
+ *     exige `position: absolute` ou `fixed`, et reste donc intouche.
+ *
+ * Le releve de lecture continue de signaler ce qui subsiste apres ce menage.
+ */
+async function neutraliserRevelations(page: Page): Promise<void> {
+  await page
+    .evaluate(() => {
+      let reposes = 0;
+      for (const el of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
+        const enLigne = el.style.transform;
+        if (!enLigne || enLigne === 'none') continue;
+        const cs = getComputedStyle(el);
+        if (cs.position === 'absolute' || cs.position === 'fixed') continue;
+        const m = cs.transform;
+        if (!m || m === 'none') continue;
+        const n = m.slice(m.indexOf('(') + 1, -1).split(',').map((v) => parseFloat(v));
+        const traduction3d = n.length >= 16;
+        // Une translation pure laisse la partie lineaire a l'identite.
+        const lineaire = traduction3d
+          ? [n[0], n[1], n[4], n[5]]
+          : [n[0], n[1], n[2], n[3]];
+        const identite =
+          Math.abs((lineaire[0] ?? 0) - 1) < 1e-6 &&
+          Math.abs(lineaire[1] ?? 0) < 1e-6 &&
+          Math.abs(lineaire[2] ?? 0) < 1e-6 &&
+          Math.abs((lineaire[3] ?? 0) - 1) < 1e-6;
+        if (!identite) continue;
+        const [dx, dy] = traduction3d ? [n[12], n[13]] : [n[4], n[5]];
+        if (Math.abs(dx ?? 0) < 2 && Math.abs(dy ?? 0) < 2) continue;
+        el.style.transform = 'none';
+        // L'apparition masque aussi par l'opacite : sans cela l'element reste
+        // invisible et serait ecarte a la lecture.
+        if (el.style.opacity && parseFloat(el.style.opacity) < 1) el.style.opacity = '1';
+        reposes++;
+      }
+      return reposes;
+    })
+    .catch(() => undefined);
+}
+
+/**
+ * Attend que la page cesse de bouger.
+ *
+ * Le gel CSS ne peut rien contre une bibliotheque d'animation qui ecrit des
+ * transformations en JavaScript image par image : au moment de la mesure,
+ * l'element peut encore etre en train de glisser vers sa place. On obtient alors
+ * une maquette decalee — un bloc entier commence avant le bord gauche et son
+ * premier mot est coupe.
+ *
+ * Plutot que de deviner une duree, on observe : quand deux releves consecutifs
+ * des memes boites sont identiques, la page est posee. Un plafond garantit qu'une
+ * animation perpetuelle (carrousel, bandeau defilant) ne bloque pas l'extraction.
+ */
+async function attendreImmobilite(page: Page): Promise<void> {
+  await page
+    .evaluate(async () => {
+      const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+      // Un echantillon suffit : une animation d'apparition deplace des blocs
+      // entiers, jamais un seul element isole au milieu de la page.
+      const tous = Array.from(document.querySelectorAll<HTMLElement>('body *'));
+      const pas = Math.max(1, Math.ceil(tous.length / 300));
+      const echantillon = tous.filter((_, i) => i % pas === 0);
+      const releve = (): string =>
+        echantillon
+          .map((el) => {
+            const r = el.getBoundingClientRect();
+            return `${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)},${Math.round(r.height)}`;
+          })
+          .join('|');
+
+      let precedent = releve();
+      // 20 x 120 ms = 2,4 s au maximum, deux releves identiques suffisent.
+      for (let i = 0; i < 20; i++) {
+        await wait(120);
+        const courant = releve();
+        if (courant === precedent) return;
+        precedent = courant;
+      }
+    })
+    .catch(() => undefined);
 }
 
 /**
