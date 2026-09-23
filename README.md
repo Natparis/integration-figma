@@ -131,6 +131,11 @@ npm run sfs -- sync
 Puis, dans Figma : ouvrez le fichier cible, lancez **Plugins ▸ Développement ▸
 Site → Figma Sync**, et cliquez sur **Synchroniser**.
 
+> **« Le port 7788 est déjà occupé »** n'arrête plus rien. Si le relais déjà en
+> place sert la même extraction, celui-ci s'y raccroche et vous garde la même
+> adresse ; sinon il glisse au port suivant et vous l'annonce — c'est alors
+> cette nouvelle adresse qu'il faut coller dans le plugin.
+
 ### 5. Plus tard, quand le site change
 
 ```bash

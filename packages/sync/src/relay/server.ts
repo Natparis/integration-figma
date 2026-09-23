@@ -25,6 +25,14 @@ export interface RelayHandle {
   close(): Promise<void>;
   /** Derniers comptes-rendus envoyes par le plugin. */
   reports: SyncReport[];
+  /**
+   * Vrai quand un relay tournait deja sur ce port et servait la meme
+   * extraction : on s'y raccroche au lieu d'echouer. Les comptes-rendus du
+   * plugin partent alors dans l'autre fenetre, pas dans celle-ci.
+   */
+  reused?: boolean;
+  /** Vrai quand le port configure etait pris et qu'on a du en changer. */
+  movedFrom?: number;
 }
 
 export interface SyncReport {
@@ -140,29 +148,110 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
     send(res, 404, { error: 'Route inconnue' });
   }
 
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', (error: NodeJS.ErrnoException) => {
-      if (error.code === 'EADDRINUSE') {
-        reject(
-          new Error(
-            `Le port ${options.port} est deja occupe. Changez \`relay.port\` dans sfs.config.json, ou arretez l autre instance.`,
-          ),
-        );
-        return;
-      }
-      reject(error);
-    });
-    server.listen(options.port, options.host, () => resolve());
-  });
+  // Un port occupe n'est pas une raison d'abandonner : le plus souvent c'est
+  // NOTRE propre relay, reste ouvert dans une autre fenetre. On le reconnait et
+  // on s'y raccroche ; sinon on se decale d'un port et on le dit clairement.
+  const attendu = (await loadSpec(outputDir))?.revision ?? null;
+  let port = -1;
+  for (let candidat = options.port; candidat <= options.port + PORTS_A_ESSAYER; candidat++) {
+    if (await tenterEcoute(server, options.host, candidat)) {
+      port = candidat;
+      break;
+    }
+    const deja = await sonderRelay(options.host, candidat);
+    if (deja && (attendu === null || deja.revision === attendu)) {
+      options.log.info(
+        `Un relay tourne deja sur le port ${candidat} et sert la meme extraction : on le reutilise.`,
+      );
+      return {
+        url: `http://${options.host}:${candidat}`,
+        reports,
+        reused: true,
+        close: async () => {},
+      };
+    }
+    options.log.warn(
+      deja
+        ? `Le port ${candidat} est pris par un relay d un autre dossier (revision ${deja.revision ?? 'inconnue'}).`
+        : `Le port ${candidat} est deja occupe par un autre programme.`,
+    );
+  }
+
+  if (port === -1) {
+    throw new RelayPortError(
+      `Aucun port libre entre ${options.port} et ${options.port + PORTS_A_ESSAYER}.\n` +
+        'Fermez la fenetre qui fait tourner l ancienne synchronisation, ' +
+        'ou changez `relay.port` dans sfs.config.json.',
+    );
+  }
 
   return {
-    url: `http://${options.host}:${options.port}`,
+    url: `http://${options.host}:${port}`,
     reports,
+    movedFrom: port === options.port ? undefined : options.port,
     close: () =>
       new Promise<void>((resolve) => {
         server.close(() => resolve());
       }),
   };
+}
+
+/** Nombre de ports testes apres celui demande. */
+const PORTS_A_ESSAYER = 9;
+
+/** Erreur d installation, pas un bug : affichee sans pile d appels. */
+export class RelayPortError extends Error {
+  override readonly name = 'RelayPortError';
+}
+
+/**
+ * Tente d'ecouter. Rend `true` si le port est pris, `false` s'il est occupe.
+ * Toute autre erreur remonte : elle signale un vrai probleme (permission, host
+ * introuvable) qu'il ne faut pas masquer en changeant de port.
+ */
+async function tenterEcoute(
+  server: http.Server,
+  host: string,
+  port: number,
+): Promise<boolean> {
+  return new Promise<boolean>((resolve, reject) => {
+    const surErreur = (error: NodeJS.ErrnoException): void => {
+      server.removeListener('listening', surSucces);
+      if (error.code === 'EADDRINUSE' || error.code === 'EACCES') {
+        resolve(false);
+        return;
+      }
+      reject(error);
+    };
+    const surSucces = (): void => {
+      server.removeListener('error', surErreur);
+      resolve(true);
+    };
+    server.once('error', surErreur);
+    server.once('listening', surSucces);
+    server.listen(port, host);
+  });
+}
+
+/**
+ * Demande a ce qui occupe le port s'il s'agit d'un relay a nous. Un programme
+ * quelconque ne repondra pas `ok` sur /health : aucun risque de confusion.
+ */
+async function sonderRelay(
+  host: string,
+  port: number,
+): Promise<{ revision: string | null } | null> {
+  try {
+    const reponse = await fetch(`http://${host}:${port}/health`, {
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!reponse.ok) return null;
+    const corps = (await reponse.json()) as { ok?: boolean; revision?: string | null };
+    if (corps?.ok !== true) return null;
+    return { revision: corps.revision ?? null };
+  } catch {
+    return null;
+  }
 }
 
 function send(res: http.ServerResponse, status: number, body: unknown): void {

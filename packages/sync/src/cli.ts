@@ -21,7 +21,8 @@ import { ConfigError, DEFAULT_CONFIG, loadConfig } from './config.js';
 import type { SfsConfig } from './config.js';
 import { Logger, logger } from './logger.js';
 import { extract, readPreviousSpec } from './build/spec.js';
-import { startRelay } from './relay/server.js';
+import { RelayPortError, startRelay } from './relay/server.js';
+import type { RelayHandle } from './relay/server.js';
 import { bundleSpec } from './bundle.js';
 import { ecrireRapport } from './preview/report.js';
 import { BrowserNotFoundError, launchBrowser } from './browser/launch.js';
@@ -368,13 +369,43 @@ async function commandBundle(config: SfsConfig, log: Logger): Promise<number> {
   return 0;
 }
 
+/**
+ * Ouvre le relay en expliquant l echec plutot qu en exposant une pile d appels :
+ * a ce stade l extraction a reussi, l utilisateur doit savoir quoi faire, pas
+ * ou le code a leve.
+ */
+async function ouvrirRelay(config: SfsConfig, log: Logger): Promise<RelayHandle | null> {
+  try {
+    return await startRelay({ ...config.relay, outputDir: config.output.dir, log });
+  } catch (error) {
+    if (error instanceof RelayPortError) {
+      log.error(error.message);
+      return null;
+    }
+    throw error;
+  }
+}
+
 async function commandServe(config: SfsConfig, log: Logger): Promise<number> {
   const spec = await readPreviousSpec(config.output.dir);
   if (!spec) {
     log.error('Aucun design-spec.json. Lancez `sfs extract` d abord.');
     return 1;
   }
-  const relay = await startRelay({ ...config.relay, outputDir: config.output.dir, log });
+  const relay = await ouvrirRelay(config, log);
+  if (!relay) return 1;
+  if (relay.reused) {
+    log.plain(
+      [
+        '',
+        `La synchronisation est deja servie sur ${relay.url}.`,
+        'Rien a faire ici : utilisez la fenetre qui tourne deja, ou fermez-la',
+        'puis relancez celle-ci. Le plugin Figma verra la derniere extraction',
+        'dans les deux cas.',
+      ].join('\n'),
+    );
+    return 0;
+  }
   log.success(`Relay actif : ${relay.url}`);
   log.plain(
     [
@@ -384,7 +415,9 @@ async function commandServe(config: SfsConfig, log: Logger): Promise<number> {
       'Dans Figma :',
       '  1. ouvrez le fichier cible,',
       '  2. Plugins ▸ Developpement ▸ « Site → Figma Sync »,',
-      `  3. l adresse ${relay.url} est deja proposee, cliquez sur Synchroniser.`,
+      relay.movedFrom === undefined
+        ? `  3. l adresse ${relay.url} est deja proposee, cliquez sur Synchroniser.`
+        : `  3. REMPLACEZ l adresse proposee par ${relay.url}, puis Synchroniser.`,
       '',
       'Ctrl+C pour arreter.',
     ].join('\n'),
@@ -408,8 +441,12 @@ async function commandSync(config: SfsConfig, log: Logger): Promise<number> {
 
 async function commandWatch(config: SfsConfig, log: Logger, intervalSeconds: number): Promise<number> {
   const interval = Math.max(10, intervalSeconds) * 1000;
-  const relay = await startRelay({ ...config.relay, outputDir: config.output.dir, log });
+  const relay = await ouvrirRelay(config, log);
+  if (!relay) return 1;
   log.success(`Relay actif : ${relay.url}`);
+  if (relay.movedFrom !== undefined) {
+    log.warn(`Indiquez ${relay.url} dans le plugin : le port habituel etait pris.`);
+  }
   log.info(`Surveillance du site toutes les ${interval / 1000} s. Ctrl+C pour arreter.`);
 
   let lastFingerprint = '';

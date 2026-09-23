@@ -326,14 +326,22 @@ async function lancer(config) {
     return 1;
   }
 
+  const rapport = path.join(RACINE, config.output?.dir ?? '.sfs', 'comparaison.html');
+
   dire('');
   dire(peindre('  ══ Votre site est lu. ══', 'gras'));
   dire('');
   dire('  ' + peindre('AVANT FIGMA : verifiez ce qui a ete compris.', 'gras'));
   dire('');
-  dire('     Ouvrez ce fichier dans votre navigateur :');
+  const ouvert = await ouvrirDansLeNavigateur(rapport);
+  if (ouvert) {
+    dire('     Le rapport de comparaison vient de s ouvrir dans votre navigateur.');
+    dire('     S il ne s affiche pas, ouvrez ce fichier a la main :');
+  } else {
+    dire('     Ouvrez ce fichier dans votre navigateur :');
+  }
   dire('');
-  dire('       ' + peindre(path.join(RACINE, config.output?.dir ?? '.sfs', 'comparaison.html'), 'bleu'));
+  dire('       ' + peindre(rapport, 'bleu'));
   dire('');
   dire('     Il montre, cote a cote, votre site et ce que l outil en a compris.');
   dire('     Un ecart visible ici se retrouvera dans Figma : autant le voir tout de suite.');
@@ -360,8 +368,46 @@ async function lancer(config) {
   dire(peindre('  Fermez-la avec Ctrl + C quand vous avez fini.', 'pale'));
   dire('');
 
-  await executer(process.execPath, [cli, 'serve']);
+  const { code: codeRelay } = await executer(process.execPath, [cli, 'serve']);
+  if (codeRelay !== 0) {
+    dire('');
+    alerte("Le pont vers Figma n a pas pu demarrer — mais la lecture du site, elle, a reussi.");
+    dire('');
+    dire('    Le rapport de comparaison est deja ecrit, vous pouvez l ouvrir :');
+    dire('');
+    dire('       ' + peindre(rapport, 'bleu'));
+    dire('');
+    dire('    Cause la plus frequente : une precedente fenetre de synchronisation');
+    dire('    tourne encore. Fermez-la, puis relancez  ' + peindre('demarrer', 'gras') + '.');
+    dire('');
+    return 1;
+  }
   return 0;
+}
+
+/**
+ * Ouvre un fichier avec le programme par defaut du systeme. Un echec n'est pas
+ * grave : le chemin reste affiche juste apres.
+ */
+async function ouvrirDansLeNavigateur(fichier) {
+  if (!existsSync(fichier)) return false;
+  const [commande, args] =
+    process.platform === 'win32'
+      ? ['cmd', ['/c', 'start', '', fichier]]
+      : process.platform === 'darwin'
+        ? ['open', [fichier]]
+        : ['xdg-open', [fichier]];
+  try {
+    const enfant = spawn(commande, args, { cwd: RACINE, stdio: 'ignore', detached: true });
+    enfant.unref();
+    return await new Promise((resolve) => {
+      enfant.once('error', () => resolve(false));
+      // Un lanceur rend la main aussitot : au-dela d'un instant, c'est parti.
+      setTimeout(() => resolve(true), 400);
+    });
+  } catch {
+    return false;
+  }
 }
 
 principal()
