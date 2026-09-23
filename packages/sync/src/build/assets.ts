@@ -9,7 +9,7 @@
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { APIRequestContext } from 'playwright-core';
+import type { APIRequestContext, BrowserContext } from 'playwright-core';
 import type { AssetSpec, Diagnostic } from '@sfs/spec';
 import type { RawCapture, RawNode } from '../browser/raw.js';
 
@@ -89,7 +89,14 @@ export class AssetCollector {
   }
 
   /** Telecharge les images et ecrit les SVG. A appeler avant la construction. */
-  async materialize(request: APIRequestContext): Promise<void> {
+  /**
+   * Contexte navigateur, s'il est fourni : sert a reencoder les formats que
+   * Figma refuse mais que Chromium sait lire (AVIF en particulier).
+   */
+  private navigateur: BrowserContext | null = null;
+
+  async materialize(request: APIRequestContext, navigateur?: BrowserContext): Promise<void> {
+    this.navigateur = navigateur ?? null;
     const assetsDir = path.join(this.outputDir, 'assets');
     await mkdir(assetsDir, { recursive: true });
 
@@ -116,6 +123,48 @@ export class AssetCollector {
     }
   }
 
+  /**
+   * Reencode en PNG une image que Figma refuse.
+   *
+   * Chromium decode nativement l'AVIF, le BMP et l'ICO. On lui demande donc de
+   * les dessiner dans un canvas, puis on ressort du PNG — le meme detour que
+   * pour les images de video. Sans navigateur disponible, on renonce proprement.
+   */
+  private async reencoder(bytes: Buffer, mime: string): Promise<Buffer | null> {
+    if (!this.navigateur) return null;
+    const page = await this.navigateur.newPage();
+    try {
+      const donnees = await page.evaluate(
+        async ({ b64, type }) => {
+          const binaire = atob(b64);
+          const octets = new Uint8Array(binaire.length);
+          for (let i = 0; i < binaire.length; i++) octets[i] = binaire.charCodeAt(i);
+          // Un type qui n'est pas `image/*` ferait echouer la construction du
+          // Blob image ; sans type, le navigateur reconnait le format aux octets.
+          const blob = type.startsWith('image/') ? new Blob([octets], { type }) : new Blob([octets]);
+          const image = await createImageBitmap(blob);
+          const canvas = document.createElement('canvas');
+          // Plafond de largeur : une photo pleine resolution reencodee en PNG
+          // depasserait vite la limite de 20 Mo de Figma.
+          const largeur = Math.min(image.width, 2400);
+          canvas.width = largeur;
+          canvas.height = Math.max(1, Math.round((largeur * image.height) / image.width));
+          const contexte = canvas.getContext('2d');
+          if (!contexte) return null;
+          contexte.drawImage(image, 0, 0, canvas.width, canvas.height);
+          return canvas.toDataURL('image/png');
+        },
+        { b64: bytes.toString('base64'), type: mime },
+      );
+      if (!donnees) return null;
+      return Buffer.from(donnees.slice(donnees.indexOf(',') + 1), 'base64');
+    } catch {
+      return null;
+    } finally {
+      await page.close().catch(() => undefined);
+    }
+  }
+
   private async fetchOne(
     request: APIRequestContext,
     image: PendingImage,
@@ -139,6 +188,10 @@ export class AssetCollector {
         bytes = Buffer.from(await response.body());
         mime = (response.headers()['content-type'] ?? '').split(';')[0]!.trim() ||
           guessMime(image.src);
+        // Un hebergement qui ne connait pas l'extension repond
+        // `application/octet-stream`. L'extension du fichier en dit alors plus
+        // long que l'en-tete : sans cela l'image est jugee non importable.
+        if (!mime.startsWith('image/')) mime = guessMime(image.src) || mime;
       }
 
       if (bytes.length === 0) throw new Error('reponse vide');
@@ -163,17 +216,31 @@ export class AssetCollector {
       }
 
       if (!FIGMA_RASTER.has(mime)) {
-        // AVIF, ICO, BMP : Figma ne les accepte pas en remplissage. Mieux vaut le
-        // dire que de laisser un cadre vide inexplique dans la maquette.
-        this.failed.add(image.src);
-        this.diagnostics.push({
-          level: 'warn',
-          code: 'asset-format-unsupported',
-          message: `Format ${mime || 'inconnu'} non importable dans Figma : ${shorten(image.src)}`,
-          where: image.src,
-          hint: 'Convertissez cette image en PNG, JPEG ou WebP sur le site.',
-        });
-        return;
+        // AVIF, ICO, BMP : Figma ne les accepte pas en remplissage. Chromium,
+        // lui, sait les decoder — autant reencoder en PNG plutot que de laisser
+        // un cadre vide dans la maquette pour une raison que le developpeur ne
+        // pourra pas corriger de son cote.
+        const converti = await this.reencoder(bytes, mime);
+        if (converti) {
+          this.diagnostics.push({
+            level: 'info',
+            code: 'asset-format-converted',
+            message: `Image ${mime} reencodee en PNG pour Figma : ${shorten(image.src)}`,
+            where: image.src,
+          });
+          bytes = converti;
+          mime = 'image/png';
+        } else {
+          this.failed.add(image.src);
+          this.diagnostics.push({
+            level: 'warn',
+            code: 'asset-format-unsupported',
+            message: `Format ${mime || 'inconnu'} non importable dans Figma : ${shorten(image.src)}`,
+            where: image.src,
+            hint: 'Convertissez cette image en PNG, JPEG ou WebP sur le site.',
+          });
+          return;
+        }
       }
 
       const file = `assets/${image.id}${MIME_EXTENSION[mime] ?? '.png'}`;

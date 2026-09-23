@@ -71,9 +71,22 @@ export async function createContext(
     viewport: { width: breakpoint.width, height: breakpoint.height },
     deviceScaleFactor: breakpoint.deviceScaleFactor ?? 1,
     colorScheme,
-    // `reduce` evite les etats intermediaires d'animation ; combine avec
-    // FREEZE_CSS, la page se presente dans son etat de repos.
-    reducedMotion: 'reduce',
+    // PAS `reduce`, malgre l'attrait apparent.
+    //
+    // Un site qui respecte l'accessibilite ecrit couramment ceci :
+    //
+    //   .diapo            { opacity: 0; animation: apparition .8s forwards; }
+    //   @media (prefers-reduced-motion: reduce) { .diapo { animation: none; } }
+    //
+    // Annoncer `reduce` supprime alors l'animation SANS retablir l'etat final :
+    // l'element reste a `opacity: 0`, donc invisible, donc ecarte a la lecture.
+    // C'est ce qui faisait disparaitre le diaporama du heros — huit blocs plein
+    // ecran, tous a opacite nulle, sur la seule page d'accueil.
+    //
+    // La stabilite est obtenue autrement, et mieux : FREEZE_CSS ramene toutes
+    // les durees a zero (l'animation atteint son etat final immediatement) et
+    // `attendreImmobilite` verifie que la page ne bouge plus avant de mesurer.
+    reducedMotion: 'no-preference',
     locale: 'fr-FR',
     timezoneId: 'Europe/Paris',
     // Emule un vrai appareil tactile au breakpoint mobile : certains sites

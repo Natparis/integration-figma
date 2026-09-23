@@ -259,7 +259,16 @@ export interface ReleveSpec {
   /** Noeuds dont la boite sort du cadre de la page. */
   horsCadre: Array<{ name: string; x: number; y: number; w: number; h: number }>;
   /** Freres qui se chevauchent dans une pile verticale : lignes ecrasees. */
-  chevauchements: Array<{ name: string; voisin: string; y: number; recouvrement: number }>;
+  chevauchements: Array<{
+    name: string;
+    voisin: string;
+    /** Conteneur des deux : c'est sa disposition qui est en cause. */
+    parent: string;
+    /** `VERTICAL`, et la source CSS d'ou elle a ete deduite. */
+    disposition: string;
+    y: number;
+    recouvrement: number;
+  }>;
 }
 
 export interface PageSpec {

@@ -80,7 +80,10 @@ function releveTexte(spec: DesignSpec): string {
       if (r.chevauchements.length > 0) {
         sections.push(`  CHEVAUCHEMENTS (${r.chevauchements.length}) — lignes qui se recouvrent`);
         for (const c of r.chevauchements.slice(0, 6)) {
-          sections.push(`    ${c.name} recouvre ${c.voisin} de ${c.recouvrement} px (y = ${c.y})`);
+          sections.push(
+            `    ${c.name} recouvre ${c.voisin} de ${c.recouvrement} px (y = ${c.y})` +
+              `  — dans « ${c.parent} » [${c.disposition}]`,
+          );
         }
       }
 
@@ -171,7 +174,7 @@ function rendreReleve(bp: BreakpointSpec): string {
       <table>${r.chevauchements
         .map(
           (c) =>
-            `<tr><td><code>${echapper(c.name)}</code></td><td>recouvre <code>${echapper(c.voisin)}</code></td><td>${c.recouvrement} px, a y = ${c.y}</td></tr>`,
+            `<tr><td><code>${echapper(c.name)}</code></td><td>recouvre <code>${echapper(c.voisin)}</code></td><td>${c.recouvrement} px, a y = ${c.y}</td><td class="ou">dans <code>${echapper(c.parent)}</code> — ${echapper(c.disposition)}</td></tr>`,
         )
         .join('')}</table>
     </div>`);

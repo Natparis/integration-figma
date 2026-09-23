@@ -447,6 +447,10 @@ export function collectPage(options: CollectOptions): RawCapture {
     if (cs.clipPath === 'inset(50%)' || cs.clip === 'rect(0px, 0px, 0px, 0px)') {
       return 'decoupe a zero';
     }
+    // `left: -9999px` : l'autre technique de masquage accessible. L'element est
+    // entierement a gauche du document, donc invisible — le garder placerait un
+    // calque a dix mille pixels du cadre.
+    if (rect.x + rect.w <= 0 || rect.y + rect.h <= 0) return 'repousse hors du document';
     // Contenu replié (accordeon, panneau ferme, diapositive hors cadre).
     if (clippedAway(el, cs)) return 'replie dans un parent a debordement masque';
     return null;
@@ -800,6 +804,11 @@ export function collectPage(options: CollectOptions): RawCapture {
     if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
     if (Math.abs(dx!) < 2 && Math.abs(dy!) < 2) return;
     if (rect.w < 40 && rect.h < 20) return;
+    // `translate(-50%, -50%)` et ses variantes sur un seul axe : c'est un
+    // centrage, pas une apparition en vol. Le signaler noierait le releve.
+    const centreX = Math.abs(dx!) < 1 || Math.abs(dx! + rect.w / 2) < 1;
+    const centreY = Math.abs(dy!) < 1 || Math.abs(dy! + rect.h / 2) < 1;
+    if (centreX && centreY) return;
     decales.push({
       what: decrire(el),
       rect,

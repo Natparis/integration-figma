@@ -92,6 +92,8 @@ export function construireReleve(
           chevauchements.push({
             name: courant.name,
             voisin: precedent.name,
+            parent: node.name,
+            disposition: decrireDisposition(node),
             y: Math.round(courant.box.y),
             recouvrement: Math.round(recouvrement),
           });
@@ -104,6 +106,23 @@ export function construireReleve(
   parcourir(root);
 
   return { ecartes, decales, cales, horsCadre, chevauchements };
+}
+
+/**
+ * Decrit la disposition d'un conteneur, et d'ou elle vient.
+ *
+ * C'est la disposition du PARENT qui produit un chevauchement, jamais l'enfant :
+ * sans elle, le releve nomme le symptome et tait la cause.
+ */
+function decrireDisposition(node: SpecNode): string {
+  const morceaux: string[] = [node.layout.mode];
+  if (node.layout.wrap) morceaux.push('retour a la ligne');
+  if (node.layout.gridColumns !== undefined) morceaux.push(`grille ${node.layout.gridColumns} col.`);
+  const css = node.devNotes?.css;
+  const source = css?.display ?? css?.['display'];
+  if (source) morceaux.push(`css: ${source}`);
+  else if (node.devNotes?.tag) morceaux.push(`<${node.devNotes.tag}>`);
+  return morceaux.join(' · ');
 }
 
 /** Vrai si le releve n'a rien a signaler : inutile de l'attacher au spec. */

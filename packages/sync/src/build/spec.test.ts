@@ -7,7 +7,7 @@ import os from 'node:os';
 import { DEFAULT_CONFIG } from '../config.js';
 import { Logger } from '../logger.js';
 import { extract } from './spec.js';
-import type { SpecNode } from '@sfs/spec';
+import type { BreakpointSpec, DesignSpec, SpecNode } from '@sfs/spec';
 
 /**
  * Extraction complete de la page de cas limites.
@@ -21,7 +21,7 @@ const FIXTURE = path.resolve(
   '..', '..', '..', '..', 'examples', 'cas-limites',
 );
 
-async function extraire(): Promise<SpecNode> {
+async function extraireSpec(): Promise<DesignSpec> {
   const sortie = await mkdtemp(path.join(os.tmpdir(), 'sfs-spec-test-'));
   try {
     const { spec } = await extract(
@@ -35,10 +35,18 @@ async function extraire(): Promise<SpecNode> {
       },
       new Logger('silent'),
     );
-    return spec.pages[0]!.breakpoints[0]!.root;
+    return spec;
   } finally {
     await rm(sortie, { recursive: true, force: true });
   }
+}
+
+async function extraireBreakpoint(): Promise<BreakpointSpec> {
+  return (await extraireSpec()).pages[0]!.breakpoints[0]!;
+}
+
+async function extraire(): Promise<SpecNode> {
+  return (await extraireBreakpoint()).root;
 }
 
 test('un element cale sur la fenetre est remonte a la racine de la page', async () => {
@@ -140,4 +148,54 @@ test('un centrage par transformation n est pas defait', async () => {
     Math.abs(centreBadge - centreCadre) <= 2,
     `badge centre en ${centreBadge}, conteneur centre en ${centreCadre}`,
   );
+});
+
+test('un contenu revele par animation survit a la lecture', async () => {
+  // Le piege : le site protege ses animations derriere
+  // `@media (prefers-reduced-motion: reduce) { animation: none }`, et son etat
+  // de base est `opacity: 0`. Annoncer `reduce` au navigateur supprimait alors
+  // l'animation SANS retablir l'opacite — la diapositive restait invisible et
+  // disparaissait de la maquette. C'est ce qui vidait le heros du site reel.
+  const racine = await extraire();
+
+  const diapo = trouverParNom(racine, /^Diapo$/);
+  assert.ok(diapo, 'la diapositive revelee par animation est absente de la maquette');
+});
+
+test('un element repousse hors ecran est ecarte, pas place a -9999 px', async () => {
+  const bp = await extraireBreakpoint();
+
+  const repoussee = trouverParNom(bp.root, /REPOUSSEE|Repoussee/i);
+  assert.equal(repoussee, null, 'l etiquette hors ecran ne doit pas entrer dans la maquette');
+
+  const horsCadre = bp.releve?.horsCadre ?? [];
+  assert.equal(
+    horsCadre.some((n) => n.x < -1000),
+    false,
+    'aucun calque ne doit se retrouver a des milliers de pixels du cadre',
+  );
+});
+
+test('un centrage par translation n est pas signale comme animation en vol', async () => {
+  // `translate(-50%, -50%)` vaut exactement la moitie de la boite : c'est la
+  // signature d'un centrage, pas d'une apparition restee en route. Le signaler
+  // noierait le releve sous des faux positifs.
+  const bp = await extraireBreakpoint();
+  assert.deepEqual(bp.releve?.decales ?? [], []);
+});
+
+test('un format que Figma refuse est reencode, pas abandonne', async () => {
+  // Deux images du site reel etaient en AVIF : Figma ne les importe pas, et le
+  // developpeur ne pouvait rien y faire depuis la maquette. Chromium sait les
+  // decoder — autant lui demander plutot que de livrer un cadre vide. Le BMP
+  // tient ici le role de l'AVIF : meme refus cote Figma, meme detour.
+  const spec = await extraireSpec();
+
+  const pastille = spec.assets.find((a) => /pastille\.bmp$/.test(a.source));
+  assert.ok(pastille, 'l image au format refuse est absente des assets');
+  assert.equal(pastille!.mime, 'image/png', 'elle aurait du etre reencodee en PNG');
+  assert.ok(pastille!.bytes > 0);
+
+  const echecs = spec.diagnostics.filter((d) => d.code === 'asset-format-unsupported');
+  assert.deepEqual(echecs, [], 'aucune image decodable ne doit etre declaree non importable');
 });

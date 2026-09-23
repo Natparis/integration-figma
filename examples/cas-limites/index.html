@@ -23,6 +23,14 @@
   .titre-decoupe { font-size: 40px; margin: 24px 0; }
   .titre-decoupe .lettre { display: inline-block; }
   .badge { display: inline-block; background: #c00; color: #fff; padding: 2px 8px; border-radius: 4px; }
+  .repoussee { position: absolute; left: -9999px; width: 200px; }
+  @keyframes apparition { from { opacity: 0; } to { opacity: 1; } }
+  .diaporama { background: #1a1a1a; padding: 48px 24px; }
+  .diapo {
+    opacity: 0; animation: apparition .8s ease forwards;
+    color: #fff; font-size: 20px; letter-spacing: .1em;
+  }
+  @media (prefers-reduced-motion: reduce) { .diapo { animation: none; } }
   .cadre-centre { position: relative; height: 160px; background: #111; }
   .badge-centre {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
@@ -91,6 +99,25 @@
       Le menage des apparitions ne doit PAS y toucher, sinon le badge saute au
       coin de son conteneur.
     -->
+    <!--
+      Diaporama qui n'apparait que par animation, avec le garde-fou
+      d'accessibilite le plus repandu. Annoncer `prefers-reduced-motion: reduce`
+      supprime l'animation sans retablir l'opacite : la diapositive reste
+      invisible et disparait de la maquette.
+    -->
+    <!--
+      Format que Figma refuse en remplissage, mais que Chromium sait decoder.
+      Il doit arriver dans la maquette, reencode, et non manquer.
+    -->
+    <p><img class="pastille-bmp" src="pastille.bmp" width="120" height="120" alt="Pastille BMP"></p>
+
+    <!-- Masquage par repoussement : invisible, mais mesurable a x = -9999. -->
+    <p class="repoussee">ETIQUETTE REPOUSSEE HORS ECRAN</p>
+
+    <section class="diaporama">
+      <div class="diapo">DIAPOSITIVE REVELEE PAR ANIMATION</div>
+    </section>
+
     <section class="cadre-centre">
       <div class="badge-centre">CENTRE PAR TRANSFORMATION</div>
     </section>

@@ -248,8 +248,8 @@ export async function extract(config: SfsConfig, log: Logger): Promise<ExtractRe
     log.step('Recuperation des images et des icones…');
     const assets = new AssetCollector(outputDir, diagnostics, source.origin);
     for (const capture of allCaptures) assets.scan(capture);
-    const requestContext = contexts.get(primaryBreakpoint.name)!.request;
-    await assets.materialize(requestContext);
+    const contextePrincipal = contexts.get(primaryBreakpoint.name)!;
+    await assets.materialize(contextePrincipal.request, contextePrincipal);
     log.info(
       `${assets.list().length} assets prets${assets.failureCount > 0 ? ` (${assets.failureCount} en echec)` : ''}.`,
     );
