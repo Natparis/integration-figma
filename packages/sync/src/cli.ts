@@ -23,6 +23,7 @@ import { Logger, logger } from './logger.js';
 import { extract, readPreviousSpec } from './build/spec.js';
 import { startRelay } from './relay/server.js';
 import { bundleSpec } from './bundle.js';
+import { ecrireRapport } from './preview/report.js';
 import { BrowserNotFoundError, launchBrowser } from './browser/launch.js';
 
 interface Args {
@@ -101,6 +102,7 @@ site-to-figma-sync — construit et met a jour un fichier Figma depuis un site w
   sfs doctor                     verifie que l environnement est operationnel
   sfs extract                    visite le site et produit .sfs/design-spec.json
   sfs diff                       compare le site a la derniere extraction
+  sfs compare                    rapport de comparaison site / lecture (HTML)
   sfs bundle                     produit un spec autonome (assets incorpores)
   sfs serve                      lance le relay local pour le plugin Figma
   sfs sync                       extract puis serve
@@ -152,6 +154,8 @@ async function main(): Promise<number> {
       return commandDiff(config, log);
     case 'bundle':
       return commandBundle(config, log);
+    case 'compare':
+      return commandCompare(config, log);
     case 'serve':
       return commandServe(config, log);
     case 'sync':
@@ -305,8 +309,40 @@ async function commandExtract(config: SfsConfig, log: Logger): Promise<number> {
   printDiagnostics(spec, log);
   log.plain('');
   log.success(`Spec ecrit : ${path.join(outputDir, 'design-spec.json')}`);
+
+  // Rapport de comparaison systematique : c'est le seul moyen de verifier ce qui
+  // a ete compris sans ouvrir Figma, et il ne coute presque rien a produire.
+  try {
+    const rapport = await ecrireRapport(outputDir);
+    log.success(`Comparaison : ${rapport.fichier}`);
+    log.plain('   Ouvrez ce fichier pour voir, cote a cote, votre site et ce qui en a ete compris.');
+  } catch (error) {
+    log.warn(`Rapport de comparaison non produit : ${error instanceof Error ? error.message : String(error)}`);
+  }
+
   log.plain(`Prochaine etape :  sfs serve    puis lancez le plugin dans Figma.`);
   return 0;
+}
+
+async function commandCompare(config: SfsConfig, log: Logger): Promise<number> {
+  try {
+    const rapport = await ecrireRapport(config.output.dir);
+    log.success(
+      `${rapport.fichier} — ${rapport.vues} vues, ${rapport.avecCapture} avec capture du site.`,
+    );
+    if (rapport.avecCapture === 0) {
+      log.warn(
+        'Aucune capture du site : relancez `sfs extract` (les captures sont activees par defaut).',
+      );
+    }
+    return 0;
+  } catch (error) {
+    log.error(
+      `Rapport impossible : ${error instanceof Error ? error.message : String(error)}`,
+    );
+    log.plain('   Lancez `sfs extract` au prealable.');
+    return 1;
+  }
 }
 
 async function commandDiff(config: SfsConfig, log: Logger): Promise<number> {

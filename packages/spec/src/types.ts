@@ -70,6 +70,14 @@ export interface LayoutSpec {
   mode: 'NONE' | 'HORIZONTAL' | 'VERTICAL';
   /** true si le conteneur CSS etait `flex-wrap: wrap` ou une grille. */
   wrap: boolean;
+  /**
+   * Nombre de colonnes quand la disposition vient d'une grille CSS.
+   *
+   * Determinant pour les enfants : dans une grille, leur largeur vient de la
+   * piste, jamais de leur contenu. Les laisser « s'ajuster au contenu » donne
+   * des cartes de largeurs inegales la ou le site en montre d'identiques.
+   */
+  gridColumns?: number;
   /** [haut, droite, bas, gauche] */
   padding: [number, number, number, number];
   itemSpacing: number;
@@ -217,6 +225,13 @@ export interface BreakpointSpec {
   /** Hauteur mesuree du document. */
   height: number;
   root: SpecNode;
+  /**
+   * Chemin relatif d'une capture de la page telle que le navigateur l'a vue.
+   *
+   * Sert au rapport de comparaison : c'est la reference face a laquelle juger ce
+   * que l'extracteur a compris.
+   */
+  screenshot?: string;
 }
 
 export interface PageSpec {

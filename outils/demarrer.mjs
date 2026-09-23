@@ -327,7 +327,18 @@ async function lancer(config) {
   }
 
   dire('');
-  dire(peindre('  ══ Votre site est lu. Il reste deux gestes dans Figma. ══', 'gras'));
+  dire(peindre('  ══ Votre site est lu. ══', 'gras'));
+  dire('');
+  dire('  ' + peindre('AVANT FIGMA : verifiez ce qui a ete compris.', 'gras'));
+  dire('');
+  dire('     Ouvrez ce fichier dans votre navigateur :');
+  dire('');
+  dire('       ' + peindre(path.join(RACINE, config.output?.dir ?? '.sfs', 'comparaison.html'), 'bleu'));
+  dire('');
+  dire('     Il montre, cote a cote, votre site et ce que l outil en a compris.');
+  dire('     Un ecart visible ici se retrouvera dans Figma : autant le voir tout de suite.');
+  dire('');
+  dire(peindre('  ══ Puis, deux gestes dans Figma. ══', 'gras'));
   dire('');
   dire('  A) Importer le plugin — une seule fois, jamais a refaire :');
   dire('');

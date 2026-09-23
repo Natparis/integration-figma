@@ -62,6 +62,14 @@ export interface SfsConfig {
     devAnnotations: boolean;
     /** Ecrire le spec indente. Pratique pour le relire, 3,6x plus lourd. */
     pretty: boolean;
+    /**
+     * Prendre une capture de chaque page, pour le rapport de comparaison.
+     *
+     * C'est la seule facon de verifier ce que l'extracteur a compris sans
+     * ouvrir Figma — et de distinguer une erreur de lecture d'une erreur
+     * d'ecriture.
+     */
+    screenshots: boolean;
   };
   relay: {
     host: string;
@@ -95,7 +103,7 @@ export const DEFAULT_CONFIG: SfsConfig = {
     collectionName: 'Design Tokens',
   },
   components: { enabled: true, minOccurrences: 3 },
-  output: { dir: '.sfs', devAnnotations: true, pretty: false },
+  output: { dir: '.sfs', devAnnotations: true, pretty: false, screenshots: true },
   relay: { host: '127.0.0.1', port: 7788 },
   sync: { onRemoved: 'archive' },
   logLevel: 'info',

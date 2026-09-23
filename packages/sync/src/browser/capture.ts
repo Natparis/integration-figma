@@ -22,6 +22,8 @@ export interface CaptureOptions {
   colorScheme?: 'light' | 'dark';
   /** Attribut de theme a forcer sur `<html>`, ex. `data-theme="dark"`. */
   themeAttribute?: { name: string; value: string } | null;
+  /** Prendre une capture pleine page, pour le rapport de comparaison. */
+  screenshot?: boolean;
 }
 
 /** Neutralise animations et transitions : on veut l'etat final, tout de suite. */
@@ -86,6 +88,8 @@ export async function createContext(
 
 export interface CaptureResult {
   capture: RawCapture;
+  /** Capture pleine page, si elle a ete demandee. */
+  screenshot?: Buffer;
   /** Erreurs console et requetes en echec : utiles pour diagnostiquer un ecart. */
   pageErrors: string[];
   failedRequests: string[];
@@ -138,7 +142,30 @@ export async function capturePage(
       origin: options.origin,
     });
 
-    return { capture, pageErrors: dedupe(pageErrors), failedRequests: dedupe(failedRequests) };
+    const resultat: CaptureResult = {
+      capture,
+      pageErrors: dedupe(pageErrors),
+      failedRequests: dedupe(failedRequests),
+    };
+
+    if (options.screenshot) {
+      try {
+        // JPEG plutot que PNG : une page de plusieurs milliers de pixels de haut
+        // et riche en photos pese dix fois moins en JPEG, pour un usage de
+        // comparaison ou la compression ne gene pas.
+        resultat.screenshot = await page.screenshot({
+          fullPage: true,
+          type: 'jpeg',
+          quality: 78,
+          timeout: 30000,
+        });
+      } catch {
+        // Une page tres haute peut depasser les limites du navigateur : la
+        // comparaison se fera sans, plutot que d'echouer l'extraction.
+      }
+    }
+
+    return resultat;
   } finally {
     await page.close();
   }

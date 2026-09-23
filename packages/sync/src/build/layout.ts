@@ -178,6 +178,7 @@ export function inferLayout(input: LayoutInput): LayoutDecision {
         layout: {
           ...base,
           mode: 'VERTICAL',
+          gridColumns: 1,
           itemSpacing: rowGap ?? 0,
           counterAxisAlignItems: COUNTER_ALIGN[(style.alignItems ?? 'normal').trim()] ?? 'MIN',
         },
@@ -190,6 +191,7 @@ export function inferLayout(input: LayoutInput): LayoutDecision {
         layout: {
           ...base,
           mode: 'HORIZONTAL',
+          gridColumns: columns,
           itemSpacing: columnGap ?? 0,
           counterAxisAlignItems: COUNTER_ALIGN[(style.alignItems ?? 'normal').trim()] ?? 'MIN',
         },
@@ -212,6 +214,7 @@ export function inferLayout(input: LayoutInput): LayoutDecision {
         ...base,
         mode: 'HORIZONTAL',
         wrap: true,
+        gridColumns: Math.max(1, columns),
         itemSpacing: columnGap ?? 0,
         counterAxisSpacing: rowGap ?? 0,
         primaryAxisAlignItems: PRIMARY_ALIGN[(style.justifyContent ?? 'normal').trim()] ?? 'MIN',
@@ -386,6 +389,14 @@ export function inferSizing(input: SizingInput): { horizontal: SizingMode; verti
     const declaredMax = parseCssPx(style.maxWidth) ?? parseCssPx(declared.maxWidth);
     if (declaredMax !== null && Math.abs(box.w - declaredMax) <= 1.5) {
       return fill() ?? 'FIXED';
+    }
+
+    // Enfant d'une grille CSS : sa largeur vient de la piste, jamais de son
+    // contenu. « Ajuster au contenu » donnerait des cartes de largeurs inegales
+    // la ou le site en montre d'identiques — constate sur une grille de six
+    // cartes qui partaient en escalier.
+    if (parentLayout?.gridColumns !== undefined && parentLayout.gridColumns > 1) {
+      return 'FIXED';
     }
 
     if (declared.inlineLevel) return hug() ?? 'FIXED';

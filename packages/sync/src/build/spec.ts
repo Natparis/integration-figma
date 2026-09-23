@@ -16,7 +16,7 @@ import type { Browser } from 'playwright-core';
 import type {
   BreakpointSpec, DesignSpec, Diagnostic, PageSpec, SpecNode,
 } from '@sfs/spec';
-import { hashValue, makeRootSid, normalizeRoute } from '@sfs/spec';
+import { hashValue, makeRootSid, normalizeRoute, slug } from '@sfs/spec';
 import type { SfsConfig } from '../config.js';
 import { compileExcludes } from '../config.js';
 import { launchBrowser } from '../browser/launch.js';
@@ -79,6 +79,8 @@ export async function extract(config: SfsConfig, log: Logger): Promise<ExtractRe
 
     const pages: CapturedPage[] = [];
     const allCaptures: RawCapture[] = [];
+    /** Chemin de la capture d'ecran, par route et breakpoint. */
+    const screenshots = new Map<string, string>();
     const primaryBreakpoint = config.breakpoints[0]!;
 
     // Un contexte de navigateur par breakpoint, reutilise pour toutes les pages :
@@ -104,8 +106,18 @@ export async function extract(config: SfsConfig, log: Logger): Promise<ExtractRe
             maxNodes: MAX_NODES_PER_PAGE,
             devAnnotations: config.output.devAnnotations,
             origin: source.origin,
+            screenshot: config.output.screenshots,
           });
           result.capture.breakpointName = breakpoint.name;
+          if (result.screenshot) {
+            // `slug('/')` ne donne rien d'exploitable : on nomme la page
+            // d'accueil explicitement plutot que d'obtenir « x-desktop.jpg ».
+            const nomRoute = normalizeRoute(route) === '/' ? 'accueil' : slug(normalizeRoute(route));
+            const fichier = path.join('captures', `${nomRoute}-${slug(breakpoint.name)}.jpg`);
+            await mkdir(path.join(outputDir, 'captures'), { recursive: true });
+            await writeFile(path.join(outputDir, fichier), result.screenshot);
+            screenshots.set(`${normalizeRoute(route)}|${breakpoint.name}`, fichier.split(path.sep).join('/'));
+          }
           captures.set(breakpoint.name, result.capture);
           allCaptures.push(result.capture);
           title = result.capture.title || title;
@@ -271,12 +283,15 @@ export async function extract(config: SfsConfig, log: Logger): Promise<ExtractRe
         // Frame racine : la fenetre du navigateur. Le `body` y est place en
         // enfant, ce qui reproduit exactement la mise en page du site.
         const root = wrapInPageFrame(body, page, breakpoint.name, capture);
-        breakpoints.push({
+        const bp: BreakpointSpec = {
           name: breakpoint.name,
           width: breakpoint.width,
           height: Math.round(capture.documentHeight),
           root,
-        });
+        };
+        const capturePng = screenshots.get(`${page.route}|${breakpoint.name}`);
+        if (capturePng) bp.screenshot = capturePng;
+        breakpoints.push(bp);
       }
       if (breakpoints.length === 0) return;
       specPages.push({

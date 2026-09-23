@@ -101,6 +101,16 @@ Le terminal affiche ce qui a été trouvé, et **ce qui n'a pas pu être reprodu
 fidèlement**. Lisez ces avertissements : ils décrivent exactement ce que le
 développeur devra reprendre à la main.
 
+### 2 bis. Vérifier avant d'ouvrir Figma
+
+L'extraction produit aussi `.sfs/comparaison.html`. Ouvrez-le dans un
+navigateur : il montre **côte à côte** une capture de votre site et le rendu de
+ce que l'outil en a compris, avec un curseur pour superposer les deux.
+
+C'est le moyen le plus rapide de juger la fidélité — et il sépare deux questions
+qu'on confond sinon : *l'outil lit-il mal le site*, ou *écrit-il mal dans
+Figma* ? Un écart visible dans ce rapport se retrouvera dans Figma.
+
 ### 3. Installer le plugin dans Figma
 
 Une seule fois, sur le poste qui pilotera la synchronisation :
@@ -177,6 +187,7 @@ Et, dans les bibliothèques du fichier :
 | `sfs doctor`        | vérifie Node, Chromium et la configuration                        |
 | `sfs extract`       | visite le site, produit `.sfs/design-spec.json`                   |
 | `sfs diff`          | compare le site à la dernière extraction                          |
+| `sfs compare`       | rapport HTML : votre site face à ce qui en a été compris          |
 | `sfs bundle`        | spec autonome, assets incorporés — aucun serveur nécessaire        |
 | `sfs serve`         | lance le relay local pour le plugin                               |
 | `sfs sync`          | `extract` puis `serve`                                            |
