@@ -20,6 +20,9 @@
   .carrousel { display: flex; gap: 16px; overflow: hidden; width: 420px; }
   .carrousel > div { min-width: 320px; height: 120px; background: #eee; padding: 12px; }
   .hors-ecran { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0px, 0px, 0px, 0px); }
+  .titre-decoupe { font-size: 40px; margin: 24px 0; }
+  .titre-decoupe .lettre { display: inline-block; }
+  .badge { display: inline-block; background: #c00; color: #fff; padding: 2px 8px; border-radius: 4px; }
 </style>
 </head>
 <body>
@@ -50,6 +53,19 @@
     </div>
 
     <span class="hors-ecran">TEXTE MASQUE ACCESSIBLE</span>
+
+    <!--
+      Titre decoupe lettre par lettre pour etre anime : chaque lettre est un
+      `inline-block` sans presence visuelle. Ce doit rester UN seul texte.
+    -->
+    <h2 class="titre-decoupe"><span class="lettre">T</span><span class="lettre">I</span><span
+      class="lettre">T</span><span class="lettre">R</span><span class="lettre">E</span><span
+      class="lettre">D</span><span class="lettre">E</span><span class="lettre">C</span><span
+      class="lettre">O</span><span class="lettre">U</span><span class="lettre">P</span><span
+      class="lettre">E</span></h2>
+
+    <!-- Contre-exemple : un badge `inline-block` AVEC un fond reste une boite. -->
+    <p class="avec-badge">Atelier <span class="badge">COMPLET</span> ce jour-la</p>
   </main>
 
   <site-pied></site-pied>

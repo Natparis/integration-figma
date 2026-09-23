@@ -365,6 +365,10 @@ export function buildNode(args: BuildArgs): SpecNode {
   if (position === 'absolute' || position === 'fixed' || position === 'sticky') {
     layout.positioning = 'ABSOLUTE';
     layout.constraints = absoluteConstraints(node.style);
+    if (position === 'fixed' || position === 'sticky') {
+      // Cale sur la fenetre : sera remonte a la racine de la page.
+      layout.viewportFixed = true;
+    }
     if (position === 'sticky' || position === 'fixed') {
       context.diagnostics.push({
         level: 'info',

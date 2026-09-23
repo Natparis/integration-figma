@@ -384,12 +384,26 @@ export function collectPage(options: CollectOptions): RawCapture {
       const coupeY = pcs.overflowY === 'hidden' || pcs.overflowY === 'clip';
       if (coupeX || coupeY) {
         const zone = parent.getBoundingClientRect();
-        // Un conteneur defilable montre son contenu : on ne coupe que sur les
-        // axes reellement masques.
         const largeur = Math.min(own.right, zone.right) - Math.max(own.left, zone.left);
         const hauteur = Math.min(own.bottom, zone.bottom) - Math.max(own.top, zone.top);
-        if (coupeY && hauteur <= 0.5) return true;
-        if (coupeX && largeur <= 0.5) return true;
+
+        /*
+         * Condition volontairement etroite : le conteneur doit etre REPLIE,
+         * c'est-a-dire de taille quasi nulle sur l'axe masque.
+         *
+         * C'est exactement la signature d'un accordeon ferme (`max-height: 0`).
+         * Se contenter de « l'element est hors du cadre » serait beaucoup trop
+         * large : les bibliotheques de defilement fluide enveloppent toute la
+         * page dans un conteneur de la hauteur de l'ecran avec `overflow:
+         * hidden`, et tout ce qui se trouve sous la premiere zone visible —
+         * y compris le pied de page — disparaitrait de la maquette.
+         *
+         * Une diapositive hors cadre est donc conservee : Figma la decoupera de
+         * toute facon avec la frame. Mieux vaut un element de trop qu'une page
+         * amputee.
+         */
+        if (coupeY && zone.height <= 4 && hauteur <= 0.5) return true;
+        if (coupeX && zone.width <= 4 && largeur <= 0.5) return true;
       }
       parent = parent.parentElement;
     }
@@ -420,9 +434,40 @@ export function collectPage(options: CollectOptions): RawCapture {
   /* --------------------------- texte et runs --------------------------- */
 
   /**
-   * Un bloc est « texte seul » si tous ses descendants elements sont en display
-   * inline pur. `inline-block` / `inline-flex` restent des noeuds a part : ce
-   * sont des boites visuelles (puces, badges), pas du texte.
+   * Cet element de niveau ligne fait-il partie du TEXTE, ou est-ce une boite ?
+   *
+   * `display: inline` est toujours du texte. `inline-block` demande un jugement :
+   * un badge ou une puce est une vraie boite visuelle, mais une lettre isolee
+   * dans un `<span>` n'est que du texte habille pour etre anime.
+   *
+   * Le discriminant est la presence visuelle. Sans fond, bordure, ombre ni
+   * marge interieure, un `inline-block` ne dessine rien par lui-meme : c'est du
+   * texte. Sans cette distinction, un titre decoupe lettre par lettre — procede
+   * courant pour les animations d'apparition — produisait un calque par lettre.
+   */
+  function isInlineForText(el: Element, cs: CSSStyleDeclaration): boolean {
+    if (cs.display === 'inline') return true;
+    if (cs.display !== 'inline-block' && cs.display !== 'inline-flex') return false;
+
+    const fond = cs.backgroundColor;
+    if (fond && fond !== 'rgba(0, 0, 0, 0)' && fond !== 'transparent') return false;
+    if (cs.backgroundImage && cs.backgroundImage !== 'none') return false;
+    if (cs.boxShadow && cs.boxShadow !== 'none') return false;
+    for (const cote of ['borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth']) {
+      if (parseFloat(cs.getPropertyValue(dashed(cote)) || '0') > 0) return false;
+    }
+    for (const cote of ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft']) {
+      if (parseFloat(cs.getPropertyValue(dashed(cote)) || '0') > 0) return false;
+    }
+    // Un element de ligne qui porte lui-meme une image ou un vecteur n'est pas
+    // du texte.
+    if (el.querySelector('img, svg, video, canvas')) return false;
+    return true;
+  }
+
+  /**
+   * Un bloc est « texte seul » si tous ses descendants elements font partie du
+   * texte au sens ci-dessus.
    */
   function isTextOnlyBlock(el: Element): boolean {
     if (el.children.length === 0) return (el.textContent ?? '').trim().length > 0;
@@ -446,7 +491,7 @@ export function collectPage(options: CollectOptions): RawCapture {
         return false;
       }
       const cs = getComputedStyle(current);
-      if (cs.display !== 'inline') return false;
+      if (!isInlineForText(current, cs)) return false;
       current = walker.nextNode() as Element | null;
     }
     return hasText || (el.textContent ?? '').trim().length > 0;
@@ -966,7 +1011,52 @@ export function collectPage(options: CollectOptions): RawCapture {
     const after = pseudoNode(el, 'after');
     if (after) node.children.push(after);
 
+    reordonnerParProfondeur(node, el);
     return node;
+  }
+
+  /**
+   * Remet les enfants dans l'ordre de PEINTURE.
+   *
+   * Figma n'a pas de `z-index` : seul l'ordre des calques decide de ce qui passe
+   * devant, le dernier etant au-dessus. En CSS, un element positionne passe
+   * devant le contenu dans le flux, quel que soit son rang dans le document.
+   *
+   * Sans ce reclassement, un en-tete `position: fixed` declare en debut de
+   * document se retrouve DERRIERE l'image du heros qui le suit — visible dans
+   * l'arborescence des calques, invisible a l'ecran.
+   *
+   * Seuls les enfants hors flux sont deplaces : reordonner les autres
+   * changerait la mise en page, et non son empilement.
+   */
+  function reordonnerParProfondeur(node: RawNode, el: Element): void {
+    if (node.children.length < 2) return;
+
+    const rang = new Map<RawNode, number>();
+    let horsFlux = 0;
+    for (const enfant of node.children) {
+      const position = enfant.style.position ?? 'static';
+      const positionne = position !== 'static';
+      if (!positionne) {
+        rang.set(enfant, 0);
+        continue;
+      }
+      horsFlux++;
+      const z = enfant.style.zIndex;
+      const valeur = z && z !== 'auto' ? parseInt(z, 10) : 0;
+      // Les elements positionnes passent devant le flux normal ; entre eux,
+      // c'est le z-index qui tranche.
+      rang.set(enfant, Number.isFinite(valeur) ? Math.max(1, valeur + 1) : 1);
+    }
+    if (horsFlux === 0) return;
+
+    // Tri stable : a rang egal, l'ordre du document est conserve.
+    const ordonne = node.children
+      .map((enfant, index) => ({ enfant, index }))
+      .sort((a, b) => (rang.get(a.enfant)! - rang.get(b.enfant)!) || a.index - b.index)
+      .map((entree) => entree.enfant);
+    node.children = ordonne;
+    void el;
   }
 
   /* -------------------------- variables CSS :root ---------------------- */

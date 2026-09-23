@@ -80,6 +80,15 @@ export interface LayoutSpec {
   clipsContent: boolean;
   /** `ABSOLUTE` reproduit position:absolute / fixed / sticky. */
   positioning: 'AUTO' | 'ABSOLUTE';
+  /**
+   * L'element etait cale sur la FENETRE (`position: fixed` ou `sticky`).
+   *
+   * Determinant : un tel element se positionne par rapport a l'ecran, jamais par
+   * rapport a son parent DOM. Le placer relativement a son parent — qui peut se
+   * trouver des milliers de pixels plus bas — le projette hors du cadre. Il est
+   * donc remonte a la racine de la page.
+   */
+  viewportFixed?: boolean;
   constraints?: {
     horizontal: 'MIN' | 'CENTER' | 'MAX' | 'STRETCH' | 'SCALE';
     vertical: 'MIN' | 'CENTER' | 'MAX' | 'STRETCH' | 'SCALE';

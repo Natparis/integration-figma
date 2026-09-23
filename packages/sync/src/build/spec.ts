@@ -399,6 +399,23 @@ function wrapInPageFrame(
   const width = capture.viewport.width;
   const height = Math.max(capture.documentHeight, capture.viewport.height);
 
+  // Les elements cales sur la fenetre quittent leur parent DOM pour rejoindre la
+  // racine : c'est la seule place qui corresponde a leur realite visuelle, et
+  // elle les met aussi au-dessus du reste, comme dans le navigateur.
+  const cales: SpecNode[] = [];
+  const extraireCales = (noeud: SpecNode): void => {
+    const restants: SpecNode[] = [];
+    for (const enfant of noeud.children) {
+      if (enfant.layout.viewportFixed) cales.push(enfant);
+      else {
+        extraireCales(enfant);
+        restants.push(enfant);
+      }
+    }
+    noeud.children = restants;
+  };
+  extraireCales(body);
+
   const root: SpecNode = {
     sid: makeRootSid(page.route, breakpointName),
     name: `${breakpointName} · ${width}px`,
@@ -428,7 +445,20 @@ function wrapInPageFrame(
       opacity: 1,
       visible: true,
     },
-    children: [{ ...body, layout: { ...body.layout, sizing: { horizontal: 'FILL', vertical: 'HUG' } } }],
+    children: [
+      { ...body, layout: { ...body.layout, sizing: { horizontal: 'FILL', vertical: 'HUG' } } },
+      // Apres le corps de page : dans Figma, le dernier calque est au-dessus.
+      ...cales.map((noeud) => ({
+        ...noeud,
+        layout: {
+          ...noeud.layout,
+          sizing: {
+            horizontal: noeud.layout.sizing.horizontal === 'FILL' ? ('FIXED' as const) : noeud.layout.sizing.horizontal,
+            vertical: noeud.layout.sizing.vertical === 'FILL' ? ('FIXED' as const) : noeud.layout.sizing.vertical,
+          },
+        },
+      })),
+    ],
     hash: '',
     subtreeHash: '',
   };
