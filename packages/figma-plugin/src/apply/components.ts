@@ -25,12 +25,33 @@ export async function syncComponents(
   if (spec.components.length === 0) return;
 
   const page = await ensurePage(pageName);
+
+  /*
+   * Balayage prealable.
+   *
+   * L'inventaire est reconstruit a chaque synchronisation : sans ce nettoyage,
+   * les composants de la fois precedente restaient en place et les nouveaux
+   * s'ajoutaient a cote. Observe sur un vrai fichier — la page devenait un
+   * empilement illisible de doublons, annotations comprises.
+   *
+   * On ne retire que ce que NOUS avons cree, reconnaissable a sa marque : un
+   * composant ajoute a la main par la cliente sur cette page n'est pas touche.
+   */
+  let balayes = 0;
+  for (const enfant of [...page.children]) {
+    if (enfant.getPluginData(SID_KEY).startsWith('component:')) {
+      enfant.remove();
+      balayes++;
+    }
+  }
+  if (balayes > 0) context.stats.removed += balayes;
+
   let x = 0;
   let y = 0;
   let rowHeight = 0;
 
   for (const component of spec.components) {
-    const built = await buildComponent(component, spec, context);
+    const built = await buildComponent(component, spec, context, page);
     if (!built) continue;
 
     built.x = x;
@@ -54,10 +75,11 @@ async function buildComponent(
   spec: ComponentSpec,
   designSpec: DesignSpec,
   context: SyncContext,
+  page: PageNode,
 ): Promise<ComponentNode | ComponentSetNode | null> {
   try {
     if (!spec.variants || spec.variants.length < 2) {
-      const component = await materialize(spec.node.name, spec.node, designSpec, context, spec.key);
+      const component = await materialize(spec.node.name, spec.node, designSpec, context, spec.key, page);
       component.name = spec.name;
       component.description = spec.description ?? '';
       return component;
@@ -76,13 +98,19 @@ async function buildComponent(
         designSpec,
         context,
         `${spec.key}:${pairs}`,
+        page,
       );
       component.name = pairs;
       variants.push(component);
     }
-    const set = figma.combineAsVariants(variants, figma.currentPage);
+    // Sur la page d'inventaire, jamais sur la page courante : cette derniere est
+    // celle que regarde la cliente, et elle n'a rien a y faire.
+    const set = figma.combineAsVariants(variants, page);
     set.name = spec.name;
     set.description = spec.description ?? '';
+    // Marquer le jeu lui-meme : sans cela le balayage de la prochaine
+    // synchronisation ne le reconnaitrait pas et il resterait en doublon.
+    set.setPluginData(SID_KEY, `component:${spec.key}`);
     return set;
   } catch (error) {
     context.warnings.push(`Composant « ${spec.name} » non publie : ${String(error)}`);
@@ -97,10 +125,11 @@ async function materialize(
   designSpec: DesignSpec,
   context: SyncContext,
   key: string,
+  page: PageNode,
 ): Promise<ComponentNode> {
   const frame = figma.createFrame();
   frame.name = name;
-  figma.currentPage.appendChild(frame);
+  page.appendChild(frame);
 
   await applyNode(frame, node, designSpec, context);
 

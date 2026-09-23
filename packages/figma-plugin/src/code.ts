@@ -109,8 +109,31 @@ async function checkRelay(relayUrl: string): Promise<void> {
  * correspond pas.
  */
 function describeNetworkError(error: unknown, relayUrl: string): string {
-  const raw = error instanceof Error ? error.message : String(error);
-  if (/failed to fetch|networkerror|load failed/i.test(raw)) {
+  // Le bac a sable de Figma rejette parfois avec un objet nu plutot qu'une
+  // Error : `String(error)` donnait alors « [object Object] », un message qui
+  // n'apprend rien a personne.
+  const lisible = (valeur: unknown): string => {
+    if (valeur instanceof Error) return valeur.message;
+    if (typeof valeur === 'string') return valeur;
+    if (valeur && typeof valeur === 'object') {
+      const objet = valeur as Record<string, unknown>;
+      for (const champ of ['message', 'error', 'statusText', 'detail']) {
+        if (typeof objet[champ] === 'string') return objet[champ] as string;
+      }
+      try {
+        const json = JSON.stringify(valeur);
+        if (json && json !== '{}') return json;
+      } catch {
+        /* structure non serialisable */
+      }
+    }
+    return '';
+  };
+
+  const raw = lisible(error);
+  // Message vide ou inexploitable : la cause est presque toujours la meme, et
+  // mieux vaut la marche a suivre qu'un code d'erreur opaque.
+  if (!raw || raw === '[object Object]' || /failed to fetch|networkerror|load failed/i.test(raw)) {
     return [
       `Relay injoignable sur ${relayUrl}.`,
       '',

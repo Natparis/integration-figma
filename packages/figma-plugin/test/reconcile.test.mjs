@@ -496,3 +496,54 @@ test('les tailles restent correctes malgre l absence d auto-layout', async () =>
   assert.equal(carte.width, 200);
   assert.equal(carte.height, 100);
 });
+
+test('l inventaire des composants ne double pas a chaque synchronisation', async () => {
+  // Releve sur un vrai fichier : les composants de la synchronisation
+  // precedente restaient en place et les nouveaux s ajoutaient a cote. La page
+  // devenait un empilement illisible de doublons.
+  const spec = loadSpec();
+  const { figma } = createFakeFigma();
+  globalThis.figma = figma;
+  const { syncSpec } = await import('../dist/sync.mjs');
+  const options = {
+    onRemoved: 'archive', skipUnchanged: true, createComponents: true,
+    annotate: false, breakpoints: [], relayUrl: null,
+  };
+
+  await syncSpec(spec, options, [], 0, () => {}, Date.now());
+  const page = figma.root.children.find((p) => p.name === 'Composants');
+  assert.ok(page, 'page Composants absente');
+  const apresUn = page.children.length;
+  assert.ok(apresUn > 0, 'aucun composant publie');
+
+  await syncSpec(spec, options, [], 0, () => {}, Date.now());
+  assert.equal(
+    page.children.length,
+    apresUn,
+    `l inventaire est passe de ${apresUn} a ${page.children.length} composants`,
+  );
+});
+
+test('un composant ajoute a la main sur la page d inventaire est preserve', async () => {
+  // Le balayage ne doit retirer que ce que l outil a cree.
+  const spec = loadSpec();
+  const { figma } = createFakeFigma();
+  globalThis.figma = figma;
+  const { syncSpec } = await import('../dist/sync.mjs');
+  const options = {
+    onRemoved: 'archive', skipUnchanged: true, createComponents: true,
+    annotate: false, breakpoints: [], relayUrl: null,
+  };
+
+  await syncSpec(spec, options, [], 0, () => {}, Date.now());
+  const page = figma.root.children.find((p) => p.name === 'Composants');
+  const ajoutManuel = figma.createFrame();
+  ajoutManuel.name = 'Ma note personnelle';
+  page.appendChild(ajoutManuel);
+
+  await syncSpec(spec, options, [], 0, () => {}, Date.now());
+  assert.ok(
+    page.children.some((enfant) => enfant.name === 'Ma note personnelle'),
+    'un ajout manuel a ete supprime par le balayage',
+  );
+});
