@@ -256,3 +256,26 @@ test('l extraction ne pollue pas la console de la page', async () => {
   );
   assert.deepEqual(notres, [], 'une erreur JavaScript vient de notre injection, pas du site');
 });
+
+test('un enfant peint en dernier mais place en haut reste en haut', async () => {
+  // Le collecteur ordonne selon l'ordre de PEINTURE : un element positionne
+  // passe apres ses freres, ou qu'il soit a l'ecran. C'est juste pour Figma,
+  // ou le dernier calque est au-dessus — mais dans un auto-layout la liste est
+  // l'ordre de MISE EN PAGE. Le heros du site reel se rangeait ainsi en bas de
+  // sa section, sous le pied de page, alors qu'il est mesure a y = 0.
+  const racine = await extraire();
+
+  const bloc = trouverParNom(racine, /^Bloc ordre$/i);
+  assert.ok(bloc, 'la section de test est absente');
+  assert.equal(bloc!.layout.mode, 'VERTICAL');
+
+  const noms = bloc!.children.map((c) => c.name);
+  const heros = bloc!.children.findIndex((c) => /Heros releve/i.test(c.name));
+  const suite = bloc!.children.findIndex((c) => /Apres/i.test(c.name));
+  assert.ok(heros >= 0 && suite >= 0, `enfants trouves : ${noms.join(', ')}`);
+  assert.ok(
+    heros < suite,
+    `le heros est en position ${heros}, apres « ${noms[suite]} » : il tombera en bas`,
+  );
+  assert.ok(bloc!.children[heros]!.box.y < bloc!.children[suite]!.box.y);
+});

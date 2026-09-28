@@ -23,6 +23,12 @@
   .titre-decoupe { font-size: 40px; margin: 24px 0; }
   .titre-decoupe .lettre { display: inline-block; }
   .badge { display: inline-block; background: #c00; color: #fff; padding: 2px 8px; border-radius: 4px; }
+  .bloc-ordre { display: flex; flex-direction: column; }
+  .heros-releve {
+    position: relative; order: -1; height: 120px; background: #222; color: #fff;
+    display: flex; align-items: center; justify-content: center; letter-spacing: .1em;
+  }
+  .apres { height: 80px; background: #eee; display: flex; align-items: center; padding-left: 24px; }
   .pastilles { display: flex; padding: 24px; }
   .pastille {
     width: 40px; height: 40px; border-radius: 50%; background: #444; color: #fff;
@@ -119,6 +125,16 @@
       supprime l'animation sans retablir l'opacite : la diapositive reste
       invisible et disparait de la maquette.
     -->
+    <!--
+      Heros peint EN DERNIER : `position: relative` le fait passer apres ses
+      freres dans l'ordre de peinture du navigateur, alors qu'il occupe le haut
+      de la section. Range tel quel dans un auto-layout, il tombe en bas.
+    -->
+    <section class="bloc-ordre">
+      <div class="apres">SUITE DE LA SECTION</div>
+      <div class="heros-releve">HEROS EN TETE</div>
+    </section>
+
     <!--
       Superposition en grille : photo, voile et date partagent la meme cellule.
       `grid-template-columns` n'annonce qu'une colonne, la grille passe donc pour

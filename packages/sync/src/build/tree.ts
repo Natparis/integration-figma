@@ -521,6 +521,7 @@ export function buildNode(args: BuildArgs): SpecNode {
   });
   spec.children.push(...builtChildren);
 
+  ordonnerPourLaDisposition(spec);
   renoncerAuFluxSiChevauchement(spec, context, `${context.route} / ${context.breakpoint} / ${name}`);
 
   /* ------------------------- annotations et rotation ---------------------- */
@@ -553,6 +554,48 @@ export function buildNode(args: BuildArgs): SpecNode {
   /* --------------------------------- hashes ------------------------------- */
 
   return finalizeHashes(spec);
+}
+
+/**
+ * Remet les enfants d'un auto-layout dans leur ordre VISUEL.
+ *
+ * Le collecteur ordonne les enfants selon l'ordre de PEINTURE du navigateur :
+ * un element positionne passe apres ses freres dans le flux, quelle que soit sa
+ * place a l'ecran. C'est la bonne regle pour Figma, ou le dernier calque est au
+ * -dessus... mais seulement quand les calques se superposent.
+ *
+ * Dans un auto-layout, l'ordre de la liste n'est pas l'ordre de peinture : c'est
+ * l'ordre de MISE EN PAGE. Un heros peint en dernier se retrouvait donc range
+ * en bas de sa section, sous le pied de page, alors qu'il est mesure a y = 0.
+ *
+ * On trie donc les enfants en flux par leur position sur l'axe principal. Les
+ * enfants hors flux ne bougent pas : eux se superposent vraiment, et leur ordre
+ * de peinture doit etre respecte.
+ */
+function ordonnerPourLaDisposition(spec: SpecNode): void {
+  const mode = spec.layout.mode;
+  if (mode === 'NONE' || spec.layout.wrap || spec.children.length < 2) return;
+  const axe = mode === 'VERTICAL' ? 'y' : 'x';
+
+  const places: number[] = [];
+  const enFlux: SpecNode[] = [];
+  spec.children.forEach((enfant, i) => {
+    if (enfant.layout.positioning !== 'ABSOLUTE') {
+      places.push(i);
+      enFlux.push(enfant);
+    }
+  });
+  if (enFlux.length < 2) return;
+
+  // Tri stable : a position egale, l'ordre de peinture tranche.
+  const trie = enFlux
+    .map((noeud, rang) => ({ noeud, rang }))
+    .sort((a, b) => a.noeud.box[axe] - b.noeud.box[axe] || a.rang - b.rang)
+    .map((entree) => entree.noeud);
+
+  places.forEach((place, i) => {
+    spec.children[place] = trie[i]!;
+  });
 }
 
 /**
