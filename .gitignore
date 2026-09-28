@@ -5,5 +5,8 @@ sfs.config.json
 dist/
 *.tsbuildinfo
 .sfs/
+# Sorties d'extraction nommees autrement (essais sur un site donne).
+.sfs-*/
+.figma-scripts/
 out/
 *.log
