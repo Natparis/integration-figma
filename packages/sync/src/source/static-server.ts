@@ -77,6 +77,15 @@ export async function serveDirectory(root: string, host = '127.0.0.1'): Promise<
           }
         }
         if (info?.isDirectory()) {
+          // Redirection vers la forme avec barre finale, comme tout serveur web.
+          // Sans elle, `./support.js` d'une page servie sur `/dossier` est
+          // cherche a `/support.js` : le navigateur resout le relatif contre le
+          // PARENT tant que l'URL ne se termine pas par une barre.
+          const avecBarre = url.pathname.endsWith('/') ? url.pathname : url.pathname + '/';
+          if (avecBarre !== url.pathname) {
+            res.writeHead(301, { location: avecBarre + url.search }).end();
+            return;
+          }
           filePath = path.join(filePath, 'index.html');
           info = await stat(filePath).catch(() => null);
         }

@@ -21,6 +21,12 @@ const FIXTURE = path.resolve(
   '..', '..', '..', '..', 'examples', 'cas-limites',
 );
 
+/**
+ * Regression : notre propre script d'initialisation levait « parameter 1 is not
+ * of type 'Node' » sur les pages ou `documentElement` n'existe pas encore. La
+ * console de la page remontait l'erreur — que l'on imputait au site — et le
+ * chargement immediat des images differees n'etait jamais installe.
+ */
 async function extraireSpec(): Promise<DesignSpec> {
   const sortie = await mkdtemp(path.join(os.tmpdir(), 'sfs-spec-test-'));
   try {
@@ -241,4 +247,12 @@ test('une section ordinaire garde sa disposition verticale', async () => {
   const cartes = trouverParNom(racine, /^Cartes$/);
   assert.ok(cartes);
   assert.equal(cartes!.layout.mode, 'VERTICAL');
+});
+
+test('l extraction ne pollue pas la console de la page', async () => {
+  const spec = await extraireSpec();
+  const notres = spec.diagnostics.filter(
+    (d) => /MutationObserver|is not of type|not a function/i.test(d.message),
+  );
+  assert.deepEqual(notres, [], 'une erreur JavaScript vient de notre injection, pas du site');
 });

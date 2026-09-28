@@ -54,11 +54,23 @@ const INIT_SCRIPT = `
         if (src && !el.getAttribute('src')) el.setAttribute('src', src);
       }
     };
+    // Ce script s'execute AVANT tout autre : \`document.documentElement\` peut
+    // ne pas exister encore, et \`observe(null)\` leve. L'exception remontait
+    // dans la console de la page — donc dans les diagnostics d'extraction, ou
+    // elle se faisait passer pour une erreur du site — et surtout le
+    // chargement immediat des images differees n'etait jamais installe.
+    const surveiller = () => {
+      const racine = document.documentElement;
+      if (!racine) {
+        // Le document n'a pas encore de racine : on repasse au prochain tour.
+        setTimeout(surveiller, 0);
+        return;
+      }
+      eager();
+      new MutationObserver(eager).observe(racine, { childList: true, subtree: true });
+    };
     document.addEventListener('DOMContentLoaded', eager, { once: true });
-    new MutationObserver(eager).observe(document.documentElement, {
-      childList: true,
-      subtree: true,
-    });
+    surveiller();
   })();
 `;
 

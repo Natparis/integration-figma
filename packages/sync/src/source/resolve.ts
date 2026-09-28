@@ -10,7 +10,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdir, mkdtemp } from 'node:fs/promises';
 import type { SourceInfo } from '@sfs/spec';
 import { extractZip } from './zip.js';
 import { BRANCHES_PAR_DEFAUT, reconnaitreDepot, urlArchive } from './github.js';
@@ -132,7 +132,17 @@ export async function resolveSource(config: SourceConfig): Promise<ResolvedSourc
 async function resoudreDepot(depot: ReturnType<typeof reconnaitreDepot> & object, entree: string): Promise<ResolvedSource> {
   const branches = depot.branch ? [depot.branch] : [...BRANCHES_PAR_DEFAUT];
   const temp = await mkdtemp(path.join(os.tmpdir(), 'sfs-github-'));
+  // L'archive et son contenu dans DEUX dossiers distincts.
+  //
+  // `findSiteRoot` ne descend dans un dossier unique que s'il est seul : laisser
+  // `depot.zip` a cote de `LVMH-main/` lui faisait servir le niveau du dessus.
+  // Le site repondait alors sur `/LVMH-main` — sans barre finale — et toutes les
+  // ressources relatives (`./support.js`) etaient cherchees a la racine. Le
+  // moteur de rendu du site ne demarrait pas, et la maquette se remplissait de
+  // gabarits `{{ ... }}` au lieu du contenu.
   const archive = path.join(temp, 'depot.zip');
+  const contenu = path.join(temp, 'contenu');
+  await mkdir(contenu, { recursive: true });
 
   let derniereErreur = '';
   let telechargee = false;
@@ -164,7 +174,7 @@ async function resoudreDepot(depot: ReturnType<typeof reconnaitreDepot> & object
     );
   }
 
-  const { root, fileCount } = await extractZip(archive, temp);
+  const { root, fileCount } = await extractZip(archive, contenu);
   // Le sous-dossier demande dans l'adresse : `/tree/main/docs` sert `docs`.
   const racine = depot.subdir ? path.join(root, depot.subdir) : root;
   const existe = await stat(racine).catch(() => null);

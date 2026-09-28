@@ -139,7 +139,16 @@ export async function extractZip(zipPath: string, destination: string): Promise<
   return { root: await findSiteRoot(destination), fileCount, bytes };
 }
 
-async function findSiteRoot(dir: string): Promise<string> {
+/**
+ * Trouve la racine du site dans un dossier extrait.
+ *
+ * Une archive enveloppe presque toujours son contenu dans un dossier unique —
+ * `mon-site/`, ou `depot-main/` pour une archive GitHub. Servir le niveau du
+ * dessus place le site sur `/depot-main` au lieu de `/` : un chemin sans barre
+ * finale, contre lequel toute ressource relative est resolue un cran trop haut.
+ * Les scripts du site ne chargent plus, et l'on mesure une page morte.
+ */
+export async function findSiteRoot(dir: string): Promise<string> {
   const { readdir } = await import('node:fs/promises');
   let current = dir;
   // Au plus 5 niveaux : evite de partir dans un arbre profond en cas d'export
@@ -150,7 +159,12 @@ async function findSiteRoot(dir: string): Promise<string> {
     const hasHtml = visible.some((item) => item.isFile() && /\.html?$/i.test(item.name));
     if (hasHtml) return current;
     const dirs = visible.filter((item) => item.isDirectory());
-    if (dirs.length === 1 && visible.length === dirs.length) {
+    // Un fichier isole a cote du dossier unique (archive telechargee, notice)
+    // ne doit pas empecher la descente : ce n'est pas le site.
+    const fichiersUtiles = visible.filter(
+      (item) => item.isFile() && !/\.(zip|tar|gz|txt|md)$/i.test(item.name),
+    );
+    if (dirs.length === 1 && fichiersUtiles.length === 0) {
       current = path.join(current, dirs[0]!.name);
       continue;
     }
