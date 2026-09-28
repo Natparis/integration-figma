@@ -21,7 +21,10 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
-const TAILLE_MAX = 40000;
+// Petits lots : le script est retranscrit a la main dans l appel d execution,
+// et une longue ligne de JSON dense se recopie mal. Mieux vaut des morceaux
+// courts, verifiables d un coup d oeil, quitte a multiplier les appels.
+const TAILLE_MAX = 6000;
 
 /** Arrondi court : deux decimales suffisent, et le JSON pese moins. */
 const r = (n) => Math.round(n * 100) / 100;
@@ -275,9 +278,39 @@ async function principal() {
     });
   }
 
-  // Scripts prets a executer : un fichier par tache.
+  /*
+   * Regroupement en paquets.
+   *
+   * Le decoupage produit une tache par niveau quand un noeud depasse la limite :
+   * une chaine de conteneurs vides coutait donc cinq appels pour cinq frames
+   * sans contenu. Un script sait pourtant traiter plusieurs lots — chacun vise
+   * son parent par un chemin d'index — donc on remplit chaque appel jusqu'a la
+   * limite avant d'en ouvrir un autre.
+   *
+   * L'ordre est conserve : un lot ne peut viser que ce que les lots precedents
+   * ont deja bati.
+   */
+  for (const vue of vues) {
+    const paquets = [];
+    let courant = [];
+    let poids = 0;
+    for (const tache of vue.taches) {
+      const taille = JSON.stringify(tache).length;
+      if (poids + taille > TAILLE_MAX && courant.length) {
+        paquets.push(courant);
+        courant = [];
+        poids = 0;
+      }
+      courant.push(tache);
+      poids += taille;
+    }
+    if (courant.length) paquets.push(courant);
+    vue.paquets = paquets;
+  }
+
+  // Scripts prets a executer : un fichier par paquet.
   for (const [i, vue] of vues.entries()) {
-    for (const [j, tache] of vue.taches.entries()) {
+    for (const [j, paquet] of vue.paquets.entries()) {
       const premier = j === 0;
       const entete = premier
         ? `
@@ -286,31 +319,35 @@ let page = figma.root.children.find((p) => p.name === NOM);
 if (!page) { page = figma.createPage(); page.name = NOM; }
 await figma.setCurrentPageAsync(page);
 for (const enfant of [...page.children]) enfant.remove();
-const D = ${JSON.stringify(vue.racine)};
-const cible = figma.createFrame();
-cible.name = D.n;
-cible.resize(${vue.largeur}, ${Math.round(vue.hauteur)});
-cible.x = 0; cible.y = 0;
-cible.fills = D.f ? D.f.map(P) : [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
-cible.clipsContent = true;
-page.appendChild(cible);`
+const racine = figma.createFrame();
+racine.name = ${JSON.stringify(vue.racine.n)};
+racine.resize(${vue.largeur}, ${Math.round(vue.hauteur)});
+racine.x = 0; racine.y = 0;
+racine.fills = ${JSON.stringify(vue.racine.f ?? [{ t: 'S', c: [1, 1, 1], o: 1 }])}.map(P);
+racine.clipsContent = true;
+page.appendChild(racine);`
         : `
 const NOM = ${JSON.stringify(vue.page + ' — ' + vue.breakpoint)};
 const page = figma.root.children.find((p) => p.name === NOM);
 await figma.setCurrentPageAsync(page);
-let cible = page.children[0];
-for (const index of ${JSON.stringify(tache.chemin)}) cible = cible.children[index];`;
+const racine = page.children[0];`;
 
+      const lots = paquet.map((t) => ({ p: t.chemin, o: t.origine, n: t.noeuds }));
       const script =
         CONSTRUCTEUR +
         entete +
         `
-const T = ${JSON.stringify(tache.noeuds)};
-for (const d of T) await batir(d, cible, ${tache.origine[0]}, ${tache.origine[1]});
-return { cible: cible.id, createdNodeIds: [cible.id], mutatedNodeIds: [], images: aImage, poses: T.length };
+const LOTS = ${JSON.stringify(lots)};
+let poses = 0;
+for (const lot of LOTS) {
+  let cible = racine;
+  for (const index of lot.p) cible = cible.children[index];
+  for (const d of lot.n) { await batir(d, cible, lot.o[0], lot.o[1]); poses++; }
+}
+return { createdNodeIds: [racine.id], mutatedNodeIds: [], images: aImage, poses, lots: LOTS.length };
 `;
       await writeFile(
-        path.join(sortie, `vue-${String(i).padStart(2, '0')}-t${String(j).padStart(2, '0')}.js`),
+        path.join(sortie, `vue-${String(i).padStart(2, '0')}-p${String(j).padStart(2, '0')}.js`),
         script,
         'utf8',
       );
