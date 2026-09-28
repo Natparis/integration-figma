@@ -521,6 +521,8 @@ export function buildNode(args: BuildArgs): SpecNode {
   });
   spec.children.push(...builtChildren);
 
+  renoncerAuFluxSiChevauchement(spec, context, `${context.route} / ${context.breakpoint} / ${name}`);
+
   /* ------------------------- annotations et rotation ---------------------- */
 
   if (context.devAnnotations) {
@@ -551,6 +553,81 @@ export function buildNode(args: BuildArgs): SpecNode {
   /* --------------------------------- hashes ------------------------------- */
 
   return finalizeHashes(spec);
+}
+
+/**
+ * Abandonne l'auto-layout quand les enfants se superposent.
+ *
+ * Un auto-layout est une PROMESSE : les enfants se suivent, sans se recouvrir.
+ * Certaines mises en page tres courantes la trahissent — la principale etant la
+ * superposition en grille, ou plusieurs enfants occupent la meme cellule :
+ *
+ *   .carte        { display: grid; }
+ *   .carte > *    { grid-area: 1 / 1; }   // photo, voile, date : empiles
+ *
+ * `grid-template-columns` n'annonce qu'une colonne, la grille passe donc pour
+ * une pile verticale — et Figma, lui, empile VRAIMENT : la date tombe sous la
+ * photo au lieu de reposer dessus, et la carte double de hauteur. Sur le site
+ * reel, vingt cartes du catalogue etaient ainsi disloquees a chaque largeur.
+ *
+ * Plutot que de deviner l'intention CSS, on juge sur la GEOMETRIE MESUREE : si
+ * deux voisins occupent la meme place, la disposition automatique est fausse. On
+ * y renonce et on repasse en positionnement libre, qui reproduit exactement ce
+ * qui a ete mesure. Le developpeur perd une commodite ; il aurait sinon recu une
+ * maquette qui ne ressemble pas au site.
+ *
+ * Le seuil evite les faux positifs : un chevauchement decoratif (pastilles en
+ * cascade, marges negatives) reste representable par un espacement negatif, et
+ * ne doit pas coûter l'auto-layout de la page entiere.
+ */
+function renoncerAuFluxSiChevauchement(
+  spec: SpecNode,
+  context: BuildContext,
+  ou: string,
+): void {
+  if (spec.layout.mode === 'NONE') return;
+
+  const enFlux = spec.children.filter((child) => child.layout.positioning !== 'ABSOLUTE');
+  if (enFlux.length < 2) return;
+
+  let pire = 0;
+  let coupable: SpecNode | null = null;
+  for (let i = 1; i < enFlux.length; i++) {
+    const a = enFlux[i - 1]!.box;
+    const b = enFlux[i]!.box;
+    // Intersection sur les DEUX axes : un empilement se reconnait a ce que les
+    // boites occupent la meme place, quel que soit l'axe de la disposition. Le
+    // test tient donc aussi pour une grille a retour a la ligne, ou deux voisins
+    // peuvent legitimement se suivre sur des lignes differentes.
+    const largeur = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+    const hauteur = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+    if (largeur <= 4 || hauteur <= 4) continue;
+    // Il faut se recouvrir pour MOITIE au moins, sur les deux axes : en deca,
+    // c'est un decalage decoratif, representable par un espacement negatif.
+    if (largeur < Math.min(a.w, b.w) * 0.5 || hauteur < Math.min(a.h, b.h) * 0.5) continue;
+    const surface = largeur * hauteur;
+    if (surface > pire) {
+      pire = surface;
+      coupable = enFlux[i]!;
+    }
+  }
+  if (!coupable) return;
+
+  spec.layout.mode = 'NONE';
+  spec.layout.wrap = false;
+  spec.layout.itemSpacing = 0;
+  spec.layout.counterAxisSpacing = 0;
+  spec.layout.padding = [0, 0, 0, 0];
+
+  context.diagnostics.push({
+    level: 'info',
+    code: 'layout-stacked-children',
+    message:
+      `Enfants superposes (« ${coupable.name} » recouvre son voisin sur ${Math.round(pire)} px²) : ` +
+      'disposition automatique abandonnee au profit du positionnement libre, qui respecte la superposition.',
+    where: ou,
+    hint: "Dans le code, c'est en general une grille dont les enfants partagent la meme cellule (`grid-area: 1 / 1`).",
+  });
 }
 
 /** Selecteur CSS lisible, pour retrouver l'element dans le code source. */

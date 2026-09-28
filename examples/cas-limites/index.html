@@ -23,6 +23,20 @@
   .titre-decoupe { font-size: 40px; margin: 24px 0; }
   .titre-decoupe .lettre { display: inline-block; }
   .badge { display: inline-block; background: #c00; color: #fff; padding: 2px 8px; border-radius: 4px; }
+  .pastilles { display: flex; padding: 24px; }
+  .pastille {
+    width: 40px; height: 40px; border-radius: 50%; background: #444; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+  }
+  .pastille + .pastille { margin-left: -12px; }
+  .cartes { padding: 24px; }
+  .carte-empilee { display: grid; width: 320px; }
+  .carte-empilee > * { grid-area: 1 / 1; }
+  .carte-fond { height: 220px; background: linear-gradient(160deg, #3a3a3a, #8a8a8a); }
+  .carte-date {
+    align-self: start; justify-self: start; margin: 16px;
+    background: #fff; padding: 6px 10px; font-size: 12px;
+  }
   .repoussee { position: absolute; left: -9999px; width: 200px; }
   @keyframes apparition { from { opacity: 0; } to { opacity: 1; } }
   .diaporama { background: #1a1a1a; padding: 48px 24px; }
@@ -105,6 +119,29 @@
       supprime l'animation sans retablir l'opacite : la diapositive reste
       invisible et disparait de la maquette.
     -->
+    <!--
+      Superposition en grille : photo, voile et date partagent la meme cellule.
+      `grid-template-columns` n'annonce qu'une colonne, la grille passe donc pour
+      une pile verticale — et Figma empilerait VRAIMENT, faisant tomber la date
+      sous la photo. C'est le motif qui disloquait vingt cartes du catalogue.
+    -->
+    <section class="cartes">
+      <article class="carte-empilee">
+        <div class="carte-fond"></div>
+        <p class="carte-date">17 mars 2027 · 10h – 12h</p>
+      </article>
+    </section>
+
+    <!--
+      Chevauchement DECORATIF : des pastilles en cascade se mordent de 12 px sur
+      40. C'est representable par un espacement negatif : l'auto-layout doit
+      survivre, sinon la regle de superposition coûterait la mise en page de
+      toutes les listes d'avatars du web.
+    -->
+    <section class="pastilles">
+      <span class="pastille">NV</span><span class="pastille">LM</span><span class="pastille">PR</span>
+    </section>
+
     <!--
       Format que Figma refuse en remplissage, mais que Chromium sait decoder.
       Il doit arriver dans la maquette, reencode, et non manquer.

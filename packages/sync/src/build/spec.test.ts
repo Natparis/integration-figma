@@ -199,3 +199,46 @@ test('un format que Figma refuse est reencode, pas abandonne', async () => {
   const echecs = spec.diagnostics.filter((d) => d.code === 'asset-format-unsupported');
   assert.deepEqual(echecs, [], 'aucune image decodable ne doit etre declaree non importable');
 });
+
+test('des enfants superposes font abandonner la disposition automatique', async () => {
+  // Motif du site reel : photo, voile et date partagent la meme cellule de
+  // grille. `grid-template-columns` n'annonce qu'une colonne, la grille passe
+  // donc pour une pile — et Figma empilerait VRAIMENT, faisant tomber la date
+  // sous la photo. Vingt cartes du catalogue etaient ainsi disloquees.
+  const racine = await extraire();
+
+  const carte = trouverParNom(racine, /^Carte empilee$/);
+  assert.ok(carte, 'la carte empilee est absente de la maquette');
+  assert.equal(
+    carte!.layout.mode,
+    'NONE',
+    'une carte dont les enfants se superposent ne peut pas etre un auto-layout',
+  );
+
+  const fond = carte!.children.find((c) => /^Carte fond$/.test(c.name));
+  const date = carte!.children.find((c) => /17 mars/.test(c.name));
+  assert.ok(fond && date, 'le fond ou la date manque dans la carte');
+  // La date doit REPOSER sur la photo, pas se ranger dessous.
+  assert.ok(
+    date!.box.y >= fond!.box.y && date!.box.y + date!.box.h <= fond!.box.y + fond!.box.h,
+    `la date est a y = ${date!.box.y}, hors de la photo [${fond!.box.y}, ${fond!.box.y + fond!.box.h}]`,
+  );
+});
+
+test('un chevauchement decoratif ne coute pas l auto-layout', async () => {
+  // Des pastilles en cascade se mordent de 12 px sur 40 : c'est un espacement
+  // negatif, pas une superposition. La regle doit rester muette, sinon toutes
+  // les listes d'avatars du web perdraient leur disposition.
+  const racine = await extraire();
+
+  const rangee = trouverParNom(racine, /^Pastilles$/);
+  assert.ok(rangee, 'la rangee de pastilles est absente');
+  assert.equal(rangee!.layout.mode, 'HORIZONTAL');
+});
+
+test('une section ordinaire garde sa disposition verticale', async () => {
+  const racine = await extraire();
+  const cartes = trouverParNom(racine, /^Cartes$/);
+  assert.ok(cartes);
+  assert.equal(cartes!.layout.mode, 'VERTICAL');
+});

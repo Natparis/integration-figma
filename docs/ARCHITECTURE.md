@@ -78,6 +78,37 @@ Ces règles sont verrouillées par des tests dans `packages/sync/src/build/layou
 
 ---
 
+### Quand l'auto-layout ment, on y renonce
+
+Un auto-layout est une **promesse** : les enfants se suivent, ils ne se
+recouvrent pas. Une mise en page très répandue la trahit — la superposition en
+grille, où plusieurs enfants occupent la même cellule :
+
+```css
+.carte      { display: grid; }
+.carte > *  { grid-area: 1 / 1; }   /* photo, voile, date : empilés */
+```
+
+`grid-template-columns` n'annonce qu'une colonne : la grille passe pour une pile
+verticale. Figma, lui, empile *vraiment* — la date tombe sous la photo et la
+carte double de hauteur. Sur le site de production, vingt cartes du catalogue
+étaient ainsi disloquées, à chacune des trois largeurs.
+
+La règle ne cherche pas à deviner l'intention CSS, qui a mille façons de
+s'écrire. Elle juge sur la **géométrie mesurée** : si deux voisins en flux
+occupent la même place — recouvrement d'au moins la moitié de la plus petite
+boîte, **sur les deux axes** — la disposition automatique est fausse. On y
+renonce au profit du positionnement libre, qui reproduit exactement ce qui a été
+mesuré, et on le signale dans les diagnostics.
+
+Le seuil des deux axes n'est pas décoratif : il laisse passer le chevauchement
+*décoratif* (pastilles en cascade, marges négatives), qu'un espacement négatif
+représente très bien. Sans lui, toute liste d'avatars du web perdrait son
+auto-layout.
+
+Le développeur perd une commodité sur ces frames-là. Il aurait sinon reçu une
+maquette qui ne ressemble pas au site.
+
 ## 4. Les couleurs : pourquoi un parseur maison
 
 Chromium **ne normalise pas tout en `rgb()`**. Une couleur déclarée en `oklch()`
