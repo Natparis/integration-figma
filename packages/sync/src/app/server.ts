@@ -185,6 +185,10 @@ export async function demarrerApp(options: OptionsApp): Promise<{ url: string; f
       figma: config.figma.fileKey ? `https://www.figma.com/design/${config.figma.fileKey}/` : '',
       relais: `http://${options.host}:${options.port}`,
       manifeste: path.join(options.racine, 'packages', 'figma-plugin', 'manifest.json'),
+      // Chemins sur le disque : un rapport ne doit pas dependre du serveur pour
+      // etre lu. La fenetre fermee, le bouton ne repond plus — le fichier, si.
+      rapportFichier: path.join(dossierSortie, 'comparaison.html'),
+      releveFichier: path.join(dossierSortie, 'releve.txt'),
     };
     if (!spec) return base;
 

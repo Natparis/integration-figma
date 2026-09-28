@@ -171,6 +171,14 @@ export const PAGE = `<!doctype html>
     <button class="second" id="voir-rapport">Vérifier la lecture</button>
     <span class="etat">Votre site et ce qui en a été compris, côte à côte.</span>
   </div>
+  <p class="etat" style="margin-bottom:6px">
+    Le rapport est aussi un fichier sur votre disque : ouvrez-le directement si
+    cette fenêtre ne répond plus.
+  </p>
+  <div class="adresse">
+    <code id="chemin-rapport"></code>
+    <button class="second" id="copier-rapport">Copier</button>
+  </div>
 </section>
 
 <section class="carte masque" id="carte-figma">
@@ -244,6 +252,7 @@ export const PAGE = `<!doctype html>
       '<div><b>' + e.assets + '</b><span>images</span></div>';
     $('changements').textContent = e.changements || '';
     $('adresse-relais').textContent = e.relais;
+    $('chemin-rapport').textContent = e.rapportFichier || '';
     $('chemin-manifeste').textContent = e.manifeste;
     $('pied').textContent = e.quand ? 'Dernière lecture : ' + e.quand : '';
   }
@@ -259,9 +268,40 @@ export const PAGE = `<!doctype html>
   }
   copier($('copier'), 'adresse-relais');
   copier($('copier-manifeste'), 'chemin-manifeste');
+  copier($('copier-rapport'), 'chemin-rapport');
+
+  /*
+   * Surveillance du serveur.
+   *
+   * Si la fenetre noire est fermee, la page reste affichee mais ses boutons ne
+   * mènent plus nulle part : le navigateur repond « ce site est inaccessible »,
+   * message qui n'aide personne. Mieux vaut le dire ici, avec la marche a
+   * suivre.
+   */
+  var perdu = false;
+  function signalerPerte() {
+    if (perdu) return;
+    perdu = true;
+    etat.textContent = '';
+    var alerte = document.createElement('div');
+    alerte.className = 'carte';
+    alerte.style.borderColor = 'var(--ambre)';
+    alerte.innerHTML =
+      '<h2 style="color:var(--ambre)">La fenêtre de travail est fermée</h2>' +
+      '<p class="etat" style="margin-top:0">Le programme qui fait tourner cette page ne répond plus. ' +
+      'Vos fichiers sont intacts : le rapport reste lisible depuis le disque, à l’adresse indiquée plus haut.</p>' +
+      '<p class="etat">Pour reprendre : double-cliquez sur le raccourci ' +
+      '<b>Site vers Figma</b> de votre Bureau, puis revenez ici et actualisez la page.</p>';
+    document.querySelector('.page').insertBefore(alerte, document.querySelector('.carte'));
+    lancer.disabled = true;
+  }
 
   $('voir-rapport').addEventListener('click', function () {
-    window.open('/rapport', '_blank');
+    // On verifie que le serveur repond AVANT d'ouvrir un onglet : un onglet
+    // « site inaccessible » laisse croire que le rapport n'existe pas.
+    fetch('/health')
+      .then(function () { window.open('/rapport', '_blank'); })
+      .catch(signalerPerte);
   });
 
   fetch('/etat').then(function (r) { return r.json(); }).then(function (e) {
@@ -300,6 +340,11 @@ export const PAGE = `<!doctype html>
   });
 
   var flux = new EventSource('/flux');
+  flux.addEventListener('error', function () {
+    // Une extraction longue ne coupe pas le flux : seule la disparition du
+    // serveur le ferme definitivement.
+    if (flux.readyState === EventSource.CLOSED) signalerPerte();
+  });
   flux.addEventListener('ligne', function (e) {
     var d = JSON.parse(e.data);
     ecrire(d.niveau, d.message);

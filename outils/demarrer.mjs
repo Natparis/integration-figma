@@ -209,8 +209,9 @@ async function principal() {
   dire('  La fenetre de votre navigateur va s ouvrir.');
   dire('  Vous y indiquez votre site et votre fichier Figma, puis vous cliquez.');
   dire('');
-  dire(peindre('  Laissez CETTE fenetre noire ouverte pendant ce temps.', 'jaune'));
-  dire(peindre('  Fermez-la avec Ctrl + C quand vous avez fini.', 'pale'));
+  dire(peindre('  Laissez CETTE fenetre noire ouverte TANT QUE vous travaillez.', 'jaune'));
+  dire(peindre('  La fermer arrete tout : la page ne repondra plus, et Figma non plus.', 'jaune'));
+  dire(peindre('  Pour reprendre ensuite : le raccourci « Site vers Figma » du Bureau.', 'pale'));
   dire('');
 
   const cli = path.join('packages', 'sync', 'dist', 'cli.js');

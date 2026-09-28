@@ -230,6 +230,24 @@ async function commandApp(configFile: string | undefined): Promise<number> {
     return 1;
   }
 
+  /*
+   * Filet de securite.
+   *
+   * Une erreur non rattrapee terminait le processus sans un mot : la page
+   * restait a l ecran, ses boutons ne repondaient plus, et le navigateur
+   * annoncait seulement « ce site est inaccessible » — message qui ne dit ni ce
+   * qui s est passe, ni quoi faire. On prefere rester debout et le dire.
+   */
+  process.on('uncaughtException', (erreur: Error) => {
+    log.error(`Incident interne : ${erreur.message}`);
+    log.plain('L application reste ouverte. Si le probleme se repete, envoyez-moi ces lignes.');
+    log.debug(erreur.stack ?? '');
+  });
+  process.on('unhandledRejection', (raison: unknown) => {
+    log.error(`Incident interne : ${raison instanceof Error ? raison.message : String(raison)}`);
+    log.plain('L application reste ouverte.');
+  });
+
   log.success(`Application ouverte : ${app.url}`);
   log.plain('Si votre navigateur ne s est pas ouvert, collez cette adresse dedans.');
   log.plain('Laissez cette fenetre ouverte. Ctrl+C pour quitter.');
