@@ -115,10 +115,17 @@ export async function demarrerApp(options: OptionsApp): Promise<{ url: string; f
     }
 
     if (url.pathname === '/rapport' || url.pathname.startsWith('/rapport/')) {
-      const relatif = url.pathname === '/rapport'
-        ? 'comparaison.html'
-        : decodeURIComponent(url.pathname.slice('/rapport/'.length));
-      await servirFichier(res, dossierSortie, relatif);
+      // La barre finale n'est pas cosmetique : le rapport appelle ses captures
+      // en relatif (`captures/accueil.jpg`). Servi sur `/rapport`, le navigateur
+      // resout ce chemin contre la RACINE et les images repondent 404 — la
+      // colonne « le site, vu par le navigateur » reste vide, et la comparaison
+      // perd la moitie de son objet.
+      if (url.pathname === '/rapport') {
+        res.writeHead(301, { location: '/rapport/' }).end();
+        return;
+      }
+      const reste = decodeURIComponent(url.pathname.slice('/rapport/'.length));
+      await servirFichier(res, dossierSortie, reste || 'comparaison.html');
       return;
     }
 

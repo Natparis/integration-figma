@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DEFAULT_CONFIG } from '../config.js';
@@ -47,6 +47,38 @@ async function portLibre(): Promise<number> {
   await new Promise<void>((r) => s.close(() => r()));
   return port;
 }
+
+test('les captures du rapport sont servies, barre finale comprise', async () => {
+  // Regression : le rapport etait servi sur `/rapport`, sans barre finale. Ses
+  // images, appelees en relatif, etaient donc cherchees a la racine du serveur.
+  // La colonne « le site, vu par le navigateur » restait vide, et la
+  // comparaison ne comparait plus rien.
+  const dossier = await mkdtemp(path.join(tmpdir(), 'sfs-app-'));
+  await writeFile(
+    path.join(dossier, 'comparaison.html'),
+    '<img src="captures/accueil.jpg">',
+    'utf8',
+  );
+  await mkdir(path.join(dossier, 'captures'), { recursive: true });
+  await writeFile(path.join(dossier, 'captures', 'accueil.jpg'), 'jpeg', 'utf8');
+
+  const port = await portLibre();
+  const serveur = await app(dossier, port);
+  try {
+    const sansBarre = await fetch(`${serveur.url}/rapport`, { redirect: 'manual' });
+    assert.equal(sansBarre.status, 301);
+    assert.equal(sansBarre.headers.get('location'), '/rapport/');
+
+    const page = await fetch(`${serveur.url}/rapport/`);
+    assert.equal(page.status, 200);
+
+    // Le chemin que le navigateur calculera depuis la page redirigee.
+    const image = await fetch(new URL('captures/accueil.jpg', `${serveur.url}/rapport/`).href);
+    assert.equal(image.status, 200, 'la capture du site doit etre servie');
+  } finally {
+    await serveur.fermer();
+  }
+});
 
 test('le rapport ne laisse pas remonter hors du dossier de sortie', async () => {
   // La page demande ses fichiers par leur nom. Sans verification, un « .. »
