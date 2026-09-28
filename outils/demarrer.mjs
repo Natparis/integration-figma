@@ -11,14 +11,11 @@
  */
 
 import { spawn } from 'node:child_process';
-import { createInterface } from 'node:readline/promises';
 import { existsSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const RACINE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CONFIG = path.join(RACINE, 'sfs.config.json');
 
 const C = {
   reset: '\u001b[0m', gras: '\u001b[1m', pale: '\u001b[2m',
@@ -190,231 +187,42 @@ async function principal() {
     }
   }
 
-  /* -------------------------- 5. Configuration -------------------------- */
+  /* --------------------------- 5. Raccourci ----------------------------- */
 
-  titre('5/6  Configuration');
-
-  const lecteur = createInterface({ input: process.stdin, output: process.stdout });
-  let entreeFermee = false;
-  lecteur.once('close', () => {
-    entreeFermee = true;
-  });
-
-  /**
-   * Pose une question.
-   *
-   * La course avec l'evenement `close` est indispensable : si l'entree est
-   * fermee (script lance sans terminal, ou entree redirigee), `question()` ne se
-   * resout jamais et le processus s'arreterait en silence — le pire des
-   * comportements pour quelqu'un qui ne saurait pas quoi en conclure.
-   */
-  const demander = async (question, defaut = '') => {
-    if (entreeFermee) return defaut;
-    const reponse = await Promise.race([
-      lecteur.question('  ' + question),
-      new Promise((resoudre) => lecteur.once('close', () => resoudre(null))),
-    ]);
-    if (reponse === null) return defaut;
-    return reponse.trim() || defaut;
-  };
-
-  // Reponses fournies en ligne de commande : permet de rejouer l'assistant sans
-  // aucune question (mise en place assistee a distance, ou automatisation).
-  const argument = (nom) => {
-    const prefixe = `--${nom}=`;
-    const trouve = process.argv.find((valeur) => valeur.startsWith(prefixe));
-    return trouve ? trouve.slice(prefixe.length) : null;
-  };
-  const sourceArg = argument('source');
-  const cleArg = argument('cle') ?? argument('file-key');
-
-  let config = null;
-  if (existsSync(CONFIG) && !sourceArg) {
-    config = JSON.parse(await readFile(CONFIG, 'utf8'));
-    bien(`Configuration existante : ${config.source?.path || '(source non renseignee)'}`);
-    const changer = await demander('Changer de site ou de fichier Figma ? [o/N] ');
-    if (!/^o/i.test(changer)) {
-      lecteur.close();
-      return lancer(config);
-    }
+  titre('5/6  Raccourci sur le Bureau');
+  if (process.platform === 'win32') {
+    const { code } = await executer(
+      'powershell',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(RACINE, 'outils', 'raccourci.ps1')],
+      { silencieux: true },
+    );
+    if (code === 0) bien('« Site vers Figma » est sur votre Bureau.');
+    else info('Raccourci non cree — sans importance, ce fichier suffit a demarrer.');
+  } else {
+    info('Raccourci Bureau : Windows uniquement.');
   }
 
-  if (sourceArg) info('Source fournie en ligne de commande.');
+  /* -------------------------- 6. Application ---------------------------- */
+
+  titre('6/6  Ouverture de l application');
   dire('');
-  dire('  Deux informations suffisent.');
+  dire('  La fenetre de votre navigateur va s ouvrir.');
+  dire('  Vous y indiquez votre site et votre fichier Figma, puis vous cliquez.');
   dire('');
-  dire(peindre('  1) L adresse de votre site', 'gras'));
-  dire(peindre('     Exemples :  https://projet.campagnesdecom.fr/', 'pale'));
-  dire(peindre('                 http://localhost:8080/', 'pale'));
-  dire(peindre('                 C:\\Users\\vous\\Downloads\\export-site.zip', 'pale'));
-  dire('');
-  const source = sourceArg ?? (await demander('Adresse ou fichier : '));
-  if (!source) {
-    lecteur.close();
-    erreur('Aucune adresse indiquee.');
-    dire('');
-    if (entreeFermee) {
-      dire('    Ce script attend des reponses au clavier.');
-      dire('    Sous Windows : double-cliquez  demarrer.bat');
-      dire('    Sous macOS   : double-cliquez  demarrer.command');
-      dire('');
-      dire('    Ou passez les reponses directement :');
-      dire('      node outils/demarrer.mjs --source=https://mon-site.fr/ --cle=AbCdEf123456');
-    }
-    return 1;
-  }
-
-  dire('');
-  dire(peindre('  2) La cle de votre fichier Figma', 'gras'));
-  dire(peindre('     Ouvrez le fichier dans Figma, copiez son adresse. Elle ressemble a :', 'pale'));
-  dire(peindre('       figma.com/design/AbCdEf123456/Mon-fichier', 'pale'));
-  dire(peindre('                        ^^^^^^^^^^^^  c est cette partie', 'pale'));
-  dire(peindre('     Vous pouvez coller l adresse entiere : je la lirai.', 'pale'));
-  dire(peindre('     Laissez vide si vous ne l avez pas encore.', 'pale'));
-  dire('');
-  const cleBrute = cleArg ?? (await demander('Cle ou adresse Figma : '));
-  lecteur.close();
-
-  const fileKey = extraireCle(cleBrute);
-  if (cleBrute && !fileKey) {
-    alerte("Cette adresse ne ressemble pas a un lien de fichier Figma. On continue sans.");
-  }
-
-  const modele = JSON.parse(
-    await readFile(path.join(RACINE, 'sfs.config.example.json'), 'utf8'),
-  );
-  config = {
-    ...modele,
-    source: { ...modele.source, path: source },
-    figma: { ...modele.figma, fileKey: fileKey ?? '' },
-  };
-  await writeFile(CONFIG, JSON.stringify(config, null, 2) + '\n', 'utf8');
-  bien(`Configuration enregistree dans  sfs.config.json`);
-
-  return lancer(config);
-}
-
-/** Extrait la cle d un lien Figma, ou accepte une cle deja isolee. */
-function extraireCle(entree) {
-  if (!entree) return null;
-  const parLien = /figma\.com\/(?:design|file|board|slides)\/([0-9a-zA-Z]{22,128})/.exec(entree);
-  if (parLien) return parLien[1];
-  if (/^[0-9a-zA-Z]{22,128}$/.test(entree.trim())) return entree.trim();
-  return null;
-}
-
-/* ----------------------------- 6. Execution ------------------------------ */
-
-async function lancer(config) {
-  titre('6/6  Lecture de votre site');
-  info(`Source : ${config.source.path}`);
-  info('Chaque page est ouverte a trois largeurs d ecran. Comptez une minute.');
+  dire(peindre('  Laissez CETTE fenetre noire ouverte pendant ce temps.', 'jaune'));
+  dire(peindre('  Fermez-la avec Ctrl + C quand vous avez fini.', 'pale'));
   dire('');
 
   const cli = path.join('packages', 'sync', 'dist', 'cli.js');
-  const { code } = await executer(process.execPath, [cli, 'extract']);
+  const { code } = await executer(process.execPath, [cli, 'app']);
   if (code !== 0) {
     dire('');
-    erreur("La lecture du site n a pas abouti.");
-    dire('');
-    dire('    Verifications utiles :');
-    dire('      · le site s ouvre-t-il dans votre navigateur a cette adresse ?');
-    dire('      · si c est une adresse locale, le serveur du site tourne-t-il ?');
-    dire('      · si c est un .zip, le chemin est-il exact ?');
+    erreur("L application n a pas pu s ouvrir.");
     dire('');
     dire('    Le message ci-dessus indique la cause. Envoyez-le-moi si besoin.');
     return 1;
   }
-
-  const rapport = path.join(RACINE, config.output?.dir ?? '.sfs', 'comparaison.html');
-
-  dire('');
-  dire(peindre('  ══ Votre site est lu. ══', 'gras'));
-  dire('');
-  dire('  ' + peindre('AVANT FIGMA : verifiez ce qui a ete compris.', 'gras'));
-  dire('');
-  const ouvert = await ouvrirDansLeNavigateur(rapport);
-  if (ouvert) {
-    dire('     Le rapport de comparaison vient de s ouvrir dans votre navigateur.');
-    dire('     S il ne s affiche pas, ouvrez ce fichier a la main :');
-  } else {
-    dire('     Ouvrez ce fichier dans votre navigateur :');
-  }
-  dire('');
-  dire('       ' + peindre(rapport, 'bleu'));
-  dire('');
-  dire('     Il montre, cote a cote, votre site et ce que l outil en a compris.');
-  dire('     Un ecart visible ici se retrouvera dans Figma : autant le voir tout de suite.');
-  dire('');
-  dire('     Et si quelque chose manque, ce fichier texte dit quoi, et pourquoi :');
-  dire('');
-  dire('       ' + peindre(path.join(RACINE, config.output?.dir ?? '.sfs', 'releve.txt'), 'bleu'));
-  dire('');
-  dire('     Ouvrez-le avec le Bloc-notes, selectionnez tout (Ctrl + A), copiez');
-  dire('     (Ctrl + C), et collez-le-moi dans un message : c est court et complet.');
-  dire('');
-  dire(peindre('  ══ Puis, deux gestes dans Figma. ══', 'gras'));
-  dire('');
-  dire('  A) Importer le plugin — une seule fois, jamais a refaire :');
-  dire('');
-  dire('       1. ouvrez Figma (l application installee, pas le navigateur)');
-  dire('       2. appuyez sur  ' + peindre('Ctrl + /', 'gras'));
-  dire('       3. tapez  ' + peindre('manifest', 'gras'));
-  dire('       4. choisissez « Importer un plugin depuis le manifeste »');
-  dire('       5. selectionnez ce fichier :');
-  dire('');
-  dire('          ' + peindre(path.join(RACINE, 'packages', 'figma-plugin', 'manifest.json'), 'bleu'));
-  dire('');
-  dire('  B) Lancer la synchronisation :');
-  dire('');
-  dire('       1. ouvrez le fichier Figma qui doit recevoir la maquette');
-  dire('       2. appuyez sur  ' + peindre('Ctrl + /', 'gras') + '  et tapez  ' + peindre('Site', 'gras'));
-  dire('       3. lancez « Site → Figma Sync », puis cliquez sur Synchroniser');
-  dire('');
-  dire(peindre('  Laissez cette fenetre ouverte pendant la synchronisation.', 'jaune'));
-  dire(peindre('  Fermez-la avec Ctrl + C quand vous avez fini.', 'pale'));
-  dire('');
-
-  const { code: codeRelay } = await executer(process.execPath, [cli, 'serve']);
-  if (codeRelay !== 0) {
-    dire('');
-    alerte("Le pont vers Figma n a pas pu demarrer — mais la lecture du site, elle, a reussi.");
-    dire('');
-    dire('    Le rapport de comparaison est deja ecrit, vous pouvez l ouvrir :');
-    dire('');
-    dire('       ' + peindre(rapport, 'bleu'));
-    dire('');
-    dire('    Cause la plus frequente : une precedente fenetre de synchronisation');
-    dire('    tourne encore. Fermez-la, puis relancez  ' + peindre('demarrer', 'gras') + '.');
-    dire('');
-    return 1;
-  }
   return 0;
-}
-
-/**
- * Ouvre un fichier avec le programme par defaut du systeme. Un echec n'est pas
- * grave : le chemin reste affiche juste apres.
- */
-async function ouvrirDansLeNavigateur(fichier) {
-  if (!existsSync(fichier)) return false;
-  const [commande, args] =
-    process.platform === 'win32'
-      ? ['cmd', ['/c', 'start', '', fichier]]
-      : process.platform === 'darwin'
-        ? ['open', [fichier]]
-        : ['xdg-open', [fichier]];
-  try {
-    const enfant = spawn(commande, args, { cwd: RACINE, stdio: 'ignore', detached: true });
-    enfant.unref();
-    return await new Promise((resolve) => {
-      enfant.once('error', () => resolve(false));
-      // Un lanceur rend la main aussitot : au-dela d'un instant, c'est parti.
-      setTimeout(() => resolve(true), 400);
-    });
-  } catch {
-    return false;
-  }
 }
 
 principal()

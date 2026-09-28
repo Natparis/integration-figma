@@ -41,7 +41,31 @@ l'on dépose dans l'interface du plugin.
 
 ---
 
-## Le plus simple : l'assistant de démarrage
+## Le plus simple : l'application
+
+Double-cliquez sur **`demarrer`** (ou sur le raccourci **Site vers Figma** posé
+sur le Bureau). Une page s'ouvre dans votre navigateur ; elle ne demande que
+deux choses :
+
+| Champ | Ce qu'on y met |
+| --- | --- |
+| Votre site | un dépôt GitHub (`https://github.com/compte/site`), l'adresse du site publié, ou un dossier de cet ordinateur |
+| Votre fichier Figma | le lien du fichier qui recevra la maquette |
+
+Un bouton, et c'est parti. La progression s'affiche en direct. À la fin, la page
+propose de **vérifier la lecture** (votre site et ce qui en a été compris, côte
+à côte) puis d'**envoyer dans Figma**, avec l'adresse à coller déjà prête.
+
+**Quand votre site change**, rouvrez l'application : le bouton devient
+« Reprendre les modifications du site ». Elle relit le site, annonce ce qui a
+bougé (`0 ajoutés, 9 modifiés, 0 retirés`), et la synchronisation ne touche que
+ces calques-là — vos commentaires, vos liens de prototype et la mise en page du
+développeur restent en place.
+
+<details>
+<summary>L'assistant en ligne de commande, pour qui préfère le terminal</summary>
+
+
 
 Si vous n'êtes pas à l'aise avec le terminal, tout est automatisé :
 
@@ -58,6 +82,8 @@ lit le site, puis affiche la marche à suivre dans Figma. Il explique chaque
 Le reste de cette page décrit les commandes manuelles, pour qui préfère.
 
 ---
+
+</details>
 
 ## Installation manuelle
 

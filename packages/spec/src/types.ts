@@ -381,7 +381,7 @@ export interface Diagnostic {
 }
 
 export interface SourceInfo {
-  kind: 'zip' | 'directory' | 'url';
+  kind: 'zip' | 'directory' | 'url' | 'github';
   /** Racine : URL du site ou chemin du dossier. */
   root: string;
   extractedAt: string;

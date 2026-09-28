@@ -7,12 +7,13 @@
  */
 
 import { createHash } from 'node:crypto';
-import { readFile, readdir, rm, stat } from 'node:fs/promises';
+import { readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { mkdtemp } from 'node:fs/promises';
 import type { SourceInfo } from '@sfs/spec';
 import { extractZip } from './zip.js';
+import { BRANCHES_PAR_DEFAUT, reconnaitreDepot, urlArchive } from './github.js';
 import { serveDirectory } from './static-server.js';
 import type { StaticServer } from './static-server.js';
 
@@ -66,6 +67,12 @@ async function hashDirectory(root: string): Promise<string> {
 export async function resolveSource(config: SourceConfig): Promise<ResolvedSource> {
   const target = config.path.trim();
 
+  // AVANT le cas general des URL : `https://github.com/...` est une adresse de
+  // depot, pas celle d'un site. La lire en direct donnerait la page web de
+  // GitHub — du code source affiche, pas le site.
+  const depot = reconnaitreDepot(target);
+  if (depot) return resoudreDepot(depot, target);
+
   if (/^https?:\/\//i.test(target)) {
     const url = new URL(target);
     return {
@@ -115,6 +122,68 @@ export async function resolveSource(config: SourceConfig): Promise<ResolvedSourc
     contentHash: await hashDirectory(absolute),
     describe: absolute,
     dispose: () => closeQuietly(server),
+  };
+}
+
+/**
+ * Telecharge l'archive du depot, puis suit exactement le chemin d'une archive
+ * locale : meme extraction, meme serveur statique, meme hash de contenu.
+ */
+async function resoudreDepot(depot: ReturnType<typeof reconnaitreDepot> & object, entree: string): Promise<ResolvedSource> {
+  const branches = depot.branch ? [depot.branch] : [...BRANCHES_PAR_DEFAUT];
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'sfs-github-'));
+  const archive = path.join(temp, 'depot.zip');
+
+  let derniereErreur = '';
+  let telechargee = false;
+  let brancheUtilisee = '';
+  for (const branche of branches) {
+    const reponse = await fetch(urlArchive(depot, branche)).catch((error: unknown) => {
+      derniereErreur = error instanceof Error ? error.message : String(error);
+      return null;
+    });
+    if (!reponse) continue;
+    if (!reponse.ok) {
+      derniereErreur = `HTTP ${reponse.status}`;
+      continue;
+    }
+    await writeFile(archive, Buffer.from(await reponse.arrayBuffer()));
+    telechargee = true;
+    brancheUtilisee = branche;
+    break;
+  }
+
+  if (!telechargee) {
+    await rm(temp, { recursive: true, force: true });
+    throw new Error(
+      `Depot GitHub illisible : ${entree} (${derniereErreur || 'branche introuvable'}).\n` +
+        (depot.branch
+          ? 'Verifiez le nom de la branche dans l adresse.'
+          : `Aucune branche « ${BRANCHES_PAR_DEFAUT.join(' » ni « ')} » : donnez l adresse complete de la branche.`) +
+        '\nUn depot prive n est pas accessible : rendez-le public, ou donnez plutot l adresse du site publie.',
+    );
+  }
+
+  const { root, fileCount } = await extractZip(archive, temp);
+  // Le sous-dossier demande dans l'adresse : `/tree/main/docs` sert `docs`.
+  const racine = depot.subdir ? path.join(root, depot.subdir) : root;
+  const existe = await stat(racine).catch(() => null);
+  if (!existe?.isDirectory()) {
+    await rm(temp, { recursive: true, force: true });
+    throw new Error(`Le dossier « ${depot.subdir} » n existe pas dans ce depot.`);
+  }
+
+  const server = await serveDirectory(racine);
+  return {
+    kind: 'github',
+    origin: server.origin,
+    localRoot: racine,
+    contentHash: await hashDirectory(racine),
+    describe: `${depot.owner}/${depot.repo} (branche ${brancheUtilisee}, ${fileCount} fichiers)`,
+    dispose: async () => {
+      await closeQuietly(server);
+      await rm(temp, { recursive: true, force: true });
+    },
   };
 }
 

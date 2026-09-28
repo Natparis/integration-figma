@@ -14,6 +14,7 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { diffSpecs, formatDiff, validateSpec } from '@sfs/spec';
 import type { DesignSpec } from '@sfs/spec';
@@ -105,6 +106,7 @@ site-to-figma-sync — construit et met a jour un fichier Figma depuis un site w
   sfs diff                       compare le site a la derniere extraction
   sfs compare                    rapport de comparaison site / lecture (HTML)
   sfs bundle                     produit un spec autonome (assets incorpores)
+  sfs app                        ouvre l application (page, lecture, envoi Figma)
   sfs serve                      lance le relay local pour le plugin Figma
   sfs sync                       extract puis serve
   sfs watch [--interval 60]      re-extrait quand le site change
@@ -143,6 +145,9 @@ async function main(): Promise<number> {
   const configFile = typeof flags.get('config') === 'string' ? (flags.get('config') as string) : undefined;
 
   if (command === 'doctor') return commandDoctor(configFile, flags);
+  // AVANT le chargement de la configuration : au premier lancement, il n'y en a
+  // pas encore — c'est justement la page qui va la recueillir.
+  if (command === 'app') return commandApp(configFile);
 
   const { config, file } = await loadConfig(configFile, overridesFrom(flags));
   const log = new Logger(config.logLevel);
@@ -170,6 +175,92 @@ async function main(): Promise<number> {
 }
 
 /* --------------------------------- commandes ------------------------------- */
+
+/**
+ * L'application : la page, la lecture du site et le pont vers Figma au meme
+ * endroit.
+ *
+ * Elle demarre meme sans configuration : au premier lancement, les deux champs
+ * de la page sont precisement ce qui manque pour en ecrire une.
+ */
+async function commandApp(configFile: string | undefined): Promise<number> {
+  const racine = process.cwd();
+  let config: SfsConfig = DEFAULT_CONFIG;
+  let fichier = path.resolve(racine, configFile ?? 'sfs.config.json');
+  try {
+    const charge = await loadConfig(configFile, {});
+    config = charge.config;
+    if (charge.file) fichier = charge.file;
+  } catch (error) {
+    if (!(error instanceof ConfigError)) throw error;
+    // Premier lancement : source vide, la page la demandera.
+    config = { ...DEFAULT_CONFIG, source: { ...DEFAULT_CONFIG.source, path: '' } };
+  }
+
+  const log = new Logger(config.logLevel);
+  const { demarrerApp } = await import('./app/server.js');
+
+  // Un port occupe ne doit pas arreter l'application : on se decale.
+  let app: Awaited<ReturnType<typeof demarrerApp>> | null = null;
+  let derniere: unknown = null;
+  for (let port = config.relay.port; port < config.relay.port + 10; port++) {
+    try {
+      app = await demarrerApp({
+        racine,
+        cheminConfig: fichier,
+        config,
+        host: config.relay.host,
+        port,
+        log,
+        extraire: async (courante) => {
+          const code = await commandExtract(courante, log);
+          if (code !== 0) throw new Error('La lecture du site n a pas abouti.');
+        },
+      });
+      break;
+    } catch (error) {
+      derniere = error;
+    }
+  }
+  if (!app) {
+    log.error(
+      `Aucun port libre entre ${config.relay.port} et ${config.relay.port + 9} (${String(derniere)}).\n` +
+        'Fermez l autre fenetre de l application, puis relancez.',
+    );
+    return 1;
+  }
+
+  log.success(`Application ouverte : ${app.url}`);
+  log.plain('Si votre navigateur ne s est pas ouvert, collez cette adresse dedans.');
+  log.plain('Laissez cette fenetre ouverte. Ctrl+C pour quitter.');
+  ouvrirNavigateur(app.url);
+
+  await new Promise<void>((resolve) => {
+    const stop = (): void => {
+      void app!.fermer().then(resolve);
+    };
+    process.on('SIGINT', stop);
+    process.on('SIGTERM', stop);
+  });
+  return 0;
+}
+
+/** Ouvre une adresse avec le navigateur par defaut du systeme. */
+function ouvrirNavigateur(url: string): void {
+  const [commande, args] =
+    process.platform === 'win32'
+      ? ['cmd', ['/c', 'start', '', url]]
+      : process.platform === 'darwin'
+        ? ['open', [url]]
+        : ['xdg-open', [url]];
+  try {
+    const enfant = spawn(commande, args, { stdio: 'ignore', detached: true });
+    enfant.on('error', () => undefined);
+    enfant.unref();
+  } catch {
+    /* l'adresse reste affichee dans le terminal */
+  }
+}
 
 const SAMPLE_CONFIG = {
   $schema: './sfs.schema.json',
