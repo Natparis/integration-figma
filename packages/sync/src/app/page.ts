@@ -128,6 +128,11 @@ export const PAGE = `<!doctype html>
   .bilan b { display: block; font-size: 22px; font-weight: 500; }
   .bilan span { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--tres-doux); }
 
+  .avertissement {
+    margin: 0; padding: 12px 14px; border-radius: 8px; font-size: 13.5px;
+    background: color-mix(in srgb, var(--ambre) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ambre) 35%, transparent);
+  }
   .masque { display: none; }
   footer { color: var(--tres-doux); font-size: 12.5px; text-align: center; margin-top: 8px; }
 </style>
@@ -203,15 +208,26 @@ export const PAGE = `<!doctype html>
 
 <section class="carte masque" id="carte-plugin">
   <h2>Première fois seulement</h2>
-  <p class="etat" style="margin-top:0">
-    Le plugin doit être importé une fois dans Figma. Dans Figma :
-    <code>Ctrl + /</code>, tapez <code>manifest</code>, choisissez
-    « Importer un plugin depuis le manifeste », et sélectionnez ce fichier :
+  <p class="avertissement">
+    À faire dans l'<b>application Figma installée sur votre ordinateur</b>, pas dans
+    le navigateur : Figma sur le web ne sait pas importer un plugin.
+    Elle se télécharge sur <b>figma.com/downloads</b>.
   </p>
-  <div class="adresse">
-    <code id="chemin-manifeste"></code>
-    <button class="second" id="copier-manifeste">Copier</button>
-  </div>
+  <ol class="etapes" style="margin-top:16px">
+    <li>Ouvrez votre fichier dans l'application Figma (il est dans « Brouillons »).</li>
+    <li>
+      Appuyez sur <code>Ctrl + /</code> et tapez <code>manifeste</code>
+      (ou <code>manifest</code> si votre Figma est en anglais).
+    </li>
+    <li>
+      Choisissez <b>Importer un plugin depuis le manifeste…</b>, puis
+      sélectionnez ce fichier :
+      <div class="adresse">
+        <code id="chemin-manifeste"></code>
+        <button class="second" id="copier-manifeste">Copier</button>
+      </div>
+    </li>
+  </ol>
 </section>
 
 <footer id="pied"></footer>

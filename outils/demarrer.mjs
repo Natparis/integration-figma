@@ -207,6 +207,10 @@ async function principal() {
   titre('6/6  Ouverture de l application');
   dire('');
   dire('  La fenetre de votre navigateur va s ouvrir.');
+  dire('');
+  dire('  Note : l envoi vers Figma demande l APPLICATION Figma installee sur');
+  dire('  votre ordinateur. Figma dans le navigateur ne sait pas importer un');
+  dire('  plugin. Telechargement : figma.com/downloads');
   dire('  Vous y indiquez votre site et votre fichier Figma, puis vous cliquez.');
   dire('');
   dire(peindre('  Laissez CETTE fenetre noire ouverte TANT QUE vous travaillez.', 'jaune'));
