@@ -65,7 +65,11 @@ async function hashDirectory(root: string): Promise<string> {
 }
 
 export async function resolveSource(config: SourceConfig): Promise<ResolvedSource> {
-  const target = config.path.trim();
+  // « Copier en tant que chemin d'acces », dans l'explorateur Windows, entoure
+  // le chemin de guillemets. Colle tel quel, il devenait un chemin introuvable
+  // dont le message citait un nom entre guillemets — illisible pour qui vient
+  // de faire exactement le geste qu'on lui a indique.
+  const target = config.path.trim().replace(/^"(.*)"$/s, '$1').trim();
 
   // AVANT le cas general des URL : `https://github.com/...` est une adresse de
   // depot, pas celle d'un site. La lire en direct donnerait la page web de

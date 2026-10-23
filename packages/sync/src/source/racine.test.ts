@@ -137,3 +137,19 @@ test('un dossier local pointe sur le depot sert bien le sous-dossier du site', a
     await source.dispose();
   }
 });
+
+test('un chemin colle entre guillemets est accepte', async () => {
+  // « Copier en tant que chemin d acces » (explorateur Windows) entoure le
+  // chemin de guillemets. Colle tel quel, il donnait « source introuvable ».
+  const { resolveSource } = await import('./resolve.js');
+  const base = await dossier();
+  await writeFile(path.join(base, 'index.html'), '<h1>accueil</h1>', 'utf8');
+
+  const source = await resolveSource({ path: `"${base}"` });
+  try {
+    assert.equal(source.localRoot, base);
+    assert.equal((await fetch(`${source.origin}/`)).status, 200);
+  } finally {
+    await source.dispose();
+  }
+});
