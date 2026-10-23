@@ -206,6 +206,22 @@ test('un format que Figma refuse est reencode, pas abandonne', async () => {
   assert.deepEqual(echecs, [], 'aucune image decodable ne doit etre declaree non importable');
 });
 
+test('le WebP est reencode : Figma ne l importe pas', async () => {
+  // Regression : le WebP figurait parmi les formats supposes acceptes par
+  // Figma. Or `figma.createImage` n accepte que PNG, JPEG et GIF. Un site
+  // entierement livre en WebP — ce que produit toute chaine d optimisation
+  // d images moderne — arrivait donc dans Figma sans une seule photo : heros
+  // noir, vignettes vides, bandeau absent. Chaque import levait une erreur
+  // rangee dans les avertissements du plugin, que personne ne lisait.
+  const spec = await extraireSpec();
+
+  const vignette = spec.assets.find((a) => /vignette\.webp$/.test(a.source));
+  assert.ok(vignette, 'l image WebP est absente des assets');
+  assert.equal(vignette!.mime, 'image/png', 'le WebP aurait du etre reencode en PNG');
+  assert.ok(vignette!.bytes > 0);
+  assert.match(vignette!.file, /\.png$/);
+});
+
 test('des enfants superposes font abandonner la disposition automatique', async () => {
   // Motif du site reel : photo, voile et date partagent la meme cellule de
   // grille. `grid-template-columns` n'annonce qu'une colonne, la grille passe

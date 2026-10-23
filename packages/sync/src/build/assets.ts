@@ -27,8 +27,16 @@ const MIME_EXTENSION: Record<string, string> = {
   'image/bmp': '.bmp',
 };
 
-/** Formats que Figma sait importer comme remplissage bitmap. */
-const FIGMA_RASTER = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+/**
+ * Formats que Figma sait importer comme remplissage bitmap.
+ *
+ * `figma.createImage` n'accepte que PNG, JPEG et GIF. Le WebP y figurait a
+ * tort : un site entierement livre en WebP — ce que produit toute chaine
+ * d'optimisation d'images moderne — arrivait dans Figma sans une seule photo,
+ * chaque import levant une erreur rangee dans les avertissements du plugin.
+ * Retire d'ici, il passe par le reencodage en PNG comme l'AVIF et le BMP.
+ */
+const FIGMA_RASTER = new Set(['image/png', 'image/jpeg', 'image/gif']);
 
 interface PendingImage {
   id: string;
