@@ -279,3 +279,35 @@ test('un enfant peint en dernier mais place en haut reste en haut', async () => 
   );
   assert.ok(bloc!.children[heros]!.box.y < bloc!.children[suite]!.box.y);
 });
+
+test('un cadre dont le contenu ne peut pas tenir la mesure passe en taille fixe', async () => {
+  // Regression : le heros de l accueil, declare `height: max(640px, 88vh)`,
+  // sortait a 1440x112 dans Figma au lieu de 1440x901. Ni longueur en pixels ni
+  // pourcentage, la hauteur tombait sur « ajuster au contenu » ; tous les
+  // enfants etant en positionnement libre, Figma n avait plus rien a mesurer et
+  // le cadre se repliait sur son remplissage. Les cadres parents, eux aussi en
+  // « ajuster », se repliaient a leur tour : la page perdait 685 px.
+  const racine = await extraire();
+  const heros = trouverParNom(racine, /^Heros mesure$/i);
+  assert.ok(heros, 'section de heros introuvable dans la page de cas limites');
+
+  assert.ok(heros!.box.h >= 290, `hauteur mesuree inattendue : ${heros!.box.h}`);
+  assert.equal(heros!.layout.sizing.vertical, 'FIXED');
+  assert.ok(
+    heros!.children.every((enfant) => enfant.layout.positioning === 'ABSOLUTE'),
+    'le cas ne reproduit plus des enfants tous en positionnement libre',
+  );
+});
+
+test('« ajuster au contenu » survit a un minimum declare', async () => {
+  // Garde-fou du correctif precedent : un bouton a `min-height` autour d un
+  // texte plus court tient sa hauteur du minimum, pas d un defaut de mesure.
+  // Le figer couterait l adaptabilite sans rien corriger.
+  const racine = await extraire();
+  const garde = (noeud: SpecNode): number => {
+    let total = noeud.layout.sizing.vertical === 'HUG' ? 1 : 0;
+    for (const enfant of noeud.children) total += garde(enfant);
+    return total;
+  };
+  assert.ok(garde(racine) > 10, 'plus aucun cadre en « ajuster au contenu » : le garde-fou fige la maquette');
+});

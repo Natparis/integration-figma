@@ -523,6 +523,7 @@ export function buildNode(args: BuildArgs): SpecNode {
 
   ordonnerPourLaDisposition(spec);
   renoncerAuFluxSiChevauchement(spec, context, `${context.route} / ${context.breakpoint} / ${name}`);
+  renoncerAuHugNonTenu(spec, context, `${context.route} / ${context.breakpoint} / ${name}`);
 
   /* ------------------------- annotations et rotation ---------------------- */
 
@@ -671,6 +672,91 @@ function renoncerAuFluxSiChevauchement(
     where: ou,
     hint: "Dans le code, c'est en general une grille dont les enfants partagent la meme cellule (`grid-area: 1 / 1`).",
   });
+}
+
+/**
+ * Retire « ajuster au contenu » quand le contenu ne peut pas tenir la mesure.
+ *
+ * Symptome reel : le heros de l'accueil, declare `height: max(640px, 88vh)`,
+ * sortait a 1440x112 dans Figma au lieu de 1440x901. Aucune de ces deux valeurs
+ * n'est une longueur en pixels ni un pourcentage, donc la deduction tombait sur
+ * « ajuster au contenu » — et tous les enfants du heros etant en positionnement
+ * libre, Figma n'avait plus rien a mesurer : le cadre s'est replie sur son seul
+ * remplissage. Les cadres parents, eux aussi en « ajuster », se sont replies a
+ * leur tour, et la page entiere a perdu 685 px.
+ *
+ * On ne cherche pas a enumerer les formes CSS qui donnent une hauteur (`max()`,
+ * `clamp()`, `calc()`, une variable…) : la liste serait sans fin et toujours en
+ * retard d'une syntaxe. On verifie la promesse. « Ajuster » n'est honnete que si
+ * le flux reproduit la boite mesuree ; sinon la mesure fait foi, et l'axe passe
+ * en taille fixe.
+ *
+ * Le seuil est large — 8 px ou 5 % — pour ne pas figer une maquette a cause des
+ * arrondis de hauteur de ligne, qui s'accumulent sur une pile de textes.
+ */
+function renoncerAuHugNonTenu(spec: SpecNode, context: BuildContext, ou: string): void {
+  if (spec.layout.mode === 'NONE') return;
+  // Le retour a la ligne repartit les enfants sur plusieurs rangees : la somme
+  // le long de l'axe principal ne vaut plus rien, et le faux positif serait
+  // systematique.
+  if (spec.layout.wrap) return;
+
+  const sizing = spec.layout.sizing;
+  if (sizing.horizontal !== 'HUG' && sizing.vertical !== 'HUG') return;
+
+  const enFlux = spec.children.filter((child) => child.layout.positioning !== 'ABSOLUTE');
+  const [haut, droite, bas, gauche] = spec.layout.padding;
+  const ecart = spec.layout.itemSpacing * Math.max(0, enFlux.length - 1);
+  const vertical = spec.layout.mode === 'VERTICAL';
+
+  const somme = (prendre: (child: SpecNode) => number, cumul: boolean): number =>
+    cumul
+      ? enFlux.reduce((total, child) => total + prendre(child), 0) + ecart
+      : enFlux.reduce((max, child) => Math.max(max, prendre(child)), 0);
+
+  // Ce que Figma produira reellement en « ajuster » : la somme du flux, bornee
+  // par les minimums et maximums deja transmis. Sans cette borne, un bouton a
+  // `min-height: 44px` autour d'un texte de 20 px passait en taille fixe — or
+  // « ajuster, au moins 44 » est exactement ce que fait le site, et c'est la
+  // forme adaptable qu'attend le developpeur.
+  const borner = (valeur: number, min?: number, max?: number): number =>
+    Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min ?? 0, valeur));
+
+  const attendu = {
+    horizontal: borner(
+      gauche + droite + somme((c) => c.box.w, !vertical),
+      spec.layout.minWidth,
+      spec.layout.maxWidth,
+    ),
+    vertical: borner(
+      haut + bas + somme((c) => c.box.h, vertical),
+      spec.layout.minHeight,
+      spec.layout.maxHeight,
+    ),
+  };
+  const mesure = { horizontal: spec.box.w, vertical: spec.box.h };
+
+  for (const axe of ['horizontal', 'vertical'] as const) {
+    if (sizing[axe] !== 'HUG') continue;
+    const tolerance = Math.max(8, mesure[axe] * 0.05);
+    const manque = mesure[axe] - attendu[axe];
+    if (Math.abs(manque) <= tolerance) continue;
+
+    sizing[axe] = 'FIXED';
+    context.diagnostics.push({
+      level: 'info',
+      code: 'layout-hug-non-tenu',
+      message:
+        `« Ajuster au contenu » abandonne sur l axe ${axe === 'vertical' ? 'vertical' : 'horizontal'} : ` +
+        `le flux donne ${Math.round(attendu[axe])} px pour une boite mesuree a ${Math.round(mesure[axe])} px. ` +
+        'Taille fixe, qui respecte la mesure.',
+      where: ou,
+      hint:
+        enFlux.length === 0
+          ? "Tous les enfants sont en positionnement libre : le cadre tient sa hauteur du CSS, pas de son contenu."
+          : "Dans le code, la taille vient en general d une forme que Figma ne sait pas exprimer : `max()`, `clamp()`, `calc()` ou une unite de fenetre.",
+    });
+  }
 }
 
 /** Selecteur CSS lisible, pour retrouver l'element dans le code source. */
