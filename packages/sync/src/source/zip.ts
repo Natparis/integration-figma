@@ -168,7 +168,74 @@ export async function findSiteRoot(dir: string): Promise<string> {
       current = path.join(current, dirs[0]!.name);
       continue;
     }
+    const publie = await dossierPublie(current, dirs);
+    if (publie) {
+      current = publie;
+      continue;
+    }
     return current;
   }
   return current;
+}
+
+/**
+ * Dossiers de publication reconnus, du plus explicite au moins sur.
+ *
+ * `docs/` ferme la liste : GitHub Pages sait le servir, mais il contient aussi
+ * bien de la documentation. On ne le retient que s'il porte un `index.html`.
+ */
+const DOSSIERS_PUBLIES = [
+  'site',
+  'public',
+  'dist',
+  'build',
+  'www',
+  '_site',
+  'export-finale',
+  'export',
+  'docs',
+];
+
+/**
+ * Choisit le sous-dossier qui porte le site, quand la racine n'en porte pas.
+ *
+ * Un depot de developpement range le site a cote de ses outils : `LVMH-V2`
+ * contient `site/`, `outils/`, `docs/`, un README et un CLAUDE.md. La descente
+ * par dossier unique ne s'applique pas — il y en a trois — et l'on servait donc
+ * la racine du depot, ou aucune page ne repond : l'extraction ne trouvait rien
+ * a mesurer.
+ *
+ * On ne tranche que si le choix est net : un seul sous-dossier porte un
+ * `index.html`, ou bien l'un d'eux porte a la fois un `index.html` et un nom de
+ * publication connu. Devant deux candidats egaux, on rend la main plutot que de
+ * deviner.
+ */
+async function dossierPublie(
+  parent: string,
+  dirs: { name: string }[],
+): Promise<string | null> {
+  const { readdir } = await import('node:fs/promises');
+  const candidats: string[] = [];
+  for (const dir of dirs) {
+    const chemin = path.join(parent, dir.name);
+    let contenu: string[];
+    try {
+      contenu = (await readdir(chemin, { withFileTypes: true }))
+        .filter((item) => item.isFile())
+        .map((item) => item.name.toLowerCase());
+    } catch {
+      continue;
+    }
+    if (contenu.includes('index.html') || contenu.includes('index.htm')) {
+      candidats.push(dir.name);
+    }
+  }
+  if (candidats.length === 0) return null;
+  if (candidats.length === 1) return path.join(parent, candidats[0]!);
+  const connus = DOSSIERS_PUBLIES.filter((nom) =>
+    candidats.some((c) => c.toLowerCase() === nom),
+  );
+  if (connus.length !== 1) return null;
+  const choisi = candidats.find((c) => c.toLowerCase() === connus[0]);
+  return choisi ? path.join(parent, choisi) : null;
 }

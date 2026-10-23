@@ -63,3 +63,77 @@ test('un dossier sans barre finale est redirige', async () => {
     await serveur.close();
   }
 });
+
+test('le site range dans un sous-dossier est trouve', async () => {
+  // Regression : le depot de developpement range le site a cote de ses outils.
+  // `LVMH-V2` contient `site/`, `outils/`, `docs/`, un README et un CLAUDE.md :
+  // trois dossiers, donc pas de descente par dossier unique. On servait la
+  // racine du depot, ou aucune page ne repond, et l extraction ne mesurait
+  // rien.
+  const base = await dossier();
+  await writeFile(path.join(base, 'README.md'), '# depot', 'utf8');
+  await writeFile(path.join(base, 'CLAUDE.md'), '# regles', 'utf8');
+  await mkdir(path.join(base, 'site'), { recursive: true });
+  await writeFile(path.join(base, 'site', 'index.html'), '<h1>ok</h1>', 'utf8');
+  await mkdir(path.join(base, 'outils'), { recursive: true });
+  await writeFile(path.join(base, 'outils', 'preparer.mjs'), 'export {};', 'utf8');
+  await mkdir(path.join(base, 'docs'), { recursive: true });
+  await writeFile(path.join(base, 'docs', 'audit.txt'), 'audit', 'utf8');
+  assert.equal(await findSiteRoot(base), path.join(base, 'site'));
+});
+
+test('le dossier unique d une archive mene au sous-dossier publie', async () => {
+  // Le cas reel : archive GitHub, donc un `LVMH-V2-main/` qui enveloppe tout.
+  // Les deux descentes doivent s enchainer.
+  const base = await dossier();
+  const depot = path.join(base, 'LVMH-V2-main');
+  await mkdir(path.join(depot, 'site'), { recursive: true });
+  await writeFile(path.join(depot, 'README.md'), '# depot', 'utf8');
+  await writeFile(path.join(depot, 'site', 'index.html'), '<h1>ok</h1>', 'utf8');
+  await mkdir(path.join(depot, 'outils'), { recursive: true });
+  assert.equal(await findSiteRoot(base), path.join(depot, 'site'));
+});
+
+test('deux sous-dossiers publiables ne sont pas departages au hasard', async () => {
+  // `site/` et `maquette/` portent tous deux un index : aucun nom de
+  // publication connu ne tranche, on rend la main plutot que de deviner.
+  const base = await dossier();
+  await writeFile(path.join(base, 'README.md'), '# depot', 'utf8');
+  await mkdir(path.join(base, 'maquette-a'), { recursive: true });
+  await writeFile(path.join(base, 'maquette-a', 'index.html'), '<h1>a</h1>', 'utf8');
+  await mkdir(path.join(base, 'maquette-b'), { recursive: true });
+  await writeFile(path.join(base, 'maquette-b', 'index.html'), '<h1>b</h1>', 'utf8');
+  assert.equal(await findSiteRoot(base), base);
+});
+
+test('un dossier de documentation sans page n attire pas la descente', async () => {
+  const base = await dossier();
+  await writeFile(path.join(base, 'README.md'), '# depot', 'utf8');
+  await mkdir(path.join(base, 'docs'), { recursive: true });
+  await writeFile(path.join(base, 'docs', 'audit.txt'), 'audit', 'utf8');
+  await mkdir(path.join(base, 'outils'), { recursive: true });
+  assert.equal(await findSiteRoot(base), base);
+});
+
+test('un dossier local pointe sur le depot sert bien le sous-dossier du site', async () => {
+  // Le champ « dossier » de l application invite a designer un depot clone.
+  // Sans descente, on servait sa racine : `/` repondait 404 et les pages
+  // sortaient en `/site`, `/site/catalogue`.
+  const { resolveSource } = await import('./resolve.js');
+  const base = await dossier();
+  await writeFile(path.join(base, 'README.md'), '# depot', 'utf8');
+  await mkdir(path.join(base, 'site'), { recursive: true });
+  await writeFile(path.join(base, 'site', 'index.html'), '<h1>accueil</h1>', 'utf8');
+  await mkdir(path.join(base, 'outils'), { recursive: true });
+  await writeFile(path.join(base, 'outils', 'preparer.mjs'), 'export {};', 'utf8');
+
+  const source = await resolveSource({ path: base });
+  try {
+    assert.equal(source.localRoot, path.join(base, 'site'));
+    const page = await fetch(`${source.origin}/`);
+    assert.equal(page.status, 200);
+    assert.match(await page.text(), /accueil/);
+  } finally {
+    await source.dispose();
+  }
+});

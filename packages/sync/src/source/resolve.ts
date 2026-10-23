@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import type { SourceInfo } from '@sfs/spec';
-import { extractZip } from './zip.js';
+import { extractZip, findSiteRoot } from './zip.js';
 import { BRANCHES_PAR_DEFAUT, reconnaitreDepot, urlArchive } from './github.js';
 import { serveDirectory } from './static-server.js';
 import type { StaticServer } from './static-server.js';
@@ -114,13 +114,18 @@ export async function resolveSource(config: SourceConfig): Promise<ResolvedSourc
     };
   }
 
-  const server = await serveDirectory(absolute);
+  // Meme descente que pour une archive : un depot de developpement range son
+  // site dans `site/` ou `public/`, a cote de ses outils et de sa doc. Servir
+  // la racine du depot donnait un 404 sur `/` et des routes prefixees
+  // (`/site`, `/site/catalogue`) — l extraction ne mesurait rien d exploitable.
+  const racineSite = await findSiteRoot(absolute);
+  const server = await serveDirectory(racineSite);
   return {
     kind: 'directory',
     origin: server.origin,
-    localRoot: absolute,
-    contentHash: await hashDirectory(absolute),
-    describe: absolute,
+    localRoot: racineSite,
+    contentHash: await hashDirectory(racineSite),
+    describe: racineSite === absolute ? absolute : `${absolute} (site dans ${path.relative(absolute, racineSite)}/)`,
     dispose: () => closeQuietly(server),
   };
 }
