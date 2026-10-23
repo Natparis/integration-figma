@@ -170,12 +170,21 @@ async function resoudreDepot(depot: ReturnType<typeof reconnaitreDepot> & object
 
   if (!telechargee) {
     await rm(temp, { recursive: true, force: true });
+    // Un depot prive repond 404, exactement comme un depot inexistant : GitHub
+    // ne distingue pas les deux sans authentification. On ne peut donc pas
+    // nommer la cause, seulement donner les deux issues — et la premiere, le
+    // ZIP telecharge depuis le navigateur, marche dans les deux cas sans rien
+    // changer au depot. Elle passe devant pour cette raison.
     throw new Error(
       `Depot GitHub illisible : ${entree} (${derniereErreur || 'branche introuvable'}).\n` +
         (depot.branch
           ? 'Verifiez le nom de la branche dans l adresse.'
           : `Aucune branche « ${BRANCHES_PAR_DEFAUT.join(' » ni « ')} » : donnez l adresse complete de la branche.`) +
-        '\nUn depot prive n est pas accessible : rendez-le public, ou donnez plutot l adresse du site publie.',
+        '\nSi le depot est prive, il ne peut pas etre telecharge d ici.' +
+        '\nLe plus simple : ouvrez le depot dans votre navigateur, bouton vert' +
+        '\n« Code » puis « Download ZIP », et donnez ici le chemin du fichier' +
+        '\n.zip obtenu. Vous pouvez aussi le rendre public, ou donner l adresse' +
+        '\ndu site publie.',
     );
   }
 

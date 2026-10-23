@@ -153,7 +153,7 @@ export const PAGE = `<!doctype html>
   <h2>La source</h2>
   <label>
     <span class="intitule">Votre site</span>
-    <span class="aide">Un dépôt GitHub, l'adresse du site publié, ou un dossier sur cet ordinateur.</span>
+    <span class="aide">Un dépôt GitHub public, l'adresse du site publié, ou un dossier ou un fichier .zip de cet ordinateur. Un dépôt privé ne peut pas être lu d'ici : téléchargez son ZIP et donnez son chemin.</span>
     <input type="text" id="source" placeholder="https://github.com/mon-compte/mon-site" spellcheck="false">
   </label>
   <label>
