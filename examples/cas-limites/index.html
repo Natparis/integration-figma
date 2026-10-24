@@ -47,6 +47,11 @@
   .heros-mesure__fond { inset: 0; background: #333; }
   .heros-mesure__marque { left: 50%; top: 50%; transform: translate(-50%, -50%); letter-spacing: .2em; }
   .heros-mesure__pause { right: 14px; bottom: 14px; width: 32px; height: 32px; border: 1px solid #fff; }
+  /* Conteneur de contenu centre : `max-width` + marges automatiques. Figma
+     n a pas de marge automatique, l enfant se range a gauche. */
+  .colonne-large { display: block; width: 100%; }
+  .colonne-filet { height: 1px; background: #d8d5cf; }
+  .colonne-centree { max-width: 400px; margin: 0 auto; background: #eee; padding: 12px; }
   .cartes { padding: 24px; }
   .carte-empilee { display: grid; width: 320px; }
   .carte-empilee > * { grid-area: 1 / 1; }
@@ -176,12 +181,21 @@
     -->
     <p><img class="pastille-bmp" src="pastille.bmp" width="120" height="120" alt="Pastille BMP"></p>
     <p><img class="vignette-webp" src="vignette.webp" width="48" height="32" alt="Vignette WebP"></p>
+    <!-- Meme fichier, filtre CSS : Figma n a pas de filtre d image, il doit
+         etre cuit dans le PNG, et donner un asset DISTINCT de la version brute. -->
+    <p><img class="vignette-filtree" src="vignette.webp" width="48" height="32" alt="Vignette filtree"
+            style="filter: brightness(0) invert(1);"></p>
 
     <!-- Masquage par repoussement : invisible, mais mesurable a x = -9999. -->
     <p class="repoussee">ETIQUETTE REPOUSSEE HORS ECRAN</p>
 
     <section class="diaporama">
       <div class="diapo">DIAPOSITIVE REVELEE PAR ANIMATION</div>
+    </section>
+
+    <section class="colonne-large">
+      <div class="colonne-filet"></div>
+      <div class="colonne-centree">COLONNE CENTREE PAR MARGES AUTOMATIQUES</div>
     </section>
 
     <section class="heros-mesure">

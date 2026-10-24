@@ -52,6 +52,15 @@ export interface RawImage {
   /** `img`, `background`, `video-poster` : d'ou vient l'image. */
   origin: 'img' | 'background' | 'poster';
   objectFit?: string;
+  /**
+   * `filter` CSS applique a l'image, hors `none`.
+   *
+   * Figma n'a pas de filtre d'image : un logo encre sombre retourne en blanc
+   * par `brightness(0) invert(1)` arrivait noir sur le heros sombre. Le filtre
+   * est donc cuit dans le PNG a l'extraction — et il fait partie de l'identite
+   * de l'asset, le meme fichier pouvant servir filtre ici et brut ailleurs.
+   */
+  filter?: string;
 }
 
 /**

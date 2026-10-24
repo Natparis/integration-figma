@@ -171,3 +171,39 @@ test('rotation lue depuis une matrice de transformation', () => {
   assert.equal(rotationFromTransform('none'), 0);
   assert.equal(rotationFromTransform(undefined), 0);
 });
+
+test('une couche de fond de taille nulle ne peint rien', () => {
+  // Regression : le soulignement qui se deploie au survol s ecrit
+  // `background-image: linear-gradient(#0A0A0A,#0A0A0A)` avec
+  // `background-size: 0% 1px` au repos. Peint comme un remplissage pleine
+  // boite, il couvrait « Decouvrir l evenement », « Reserver » et tous les
+  // liens du pied de page d un rectangle noir.
+  const fills = buildFills({
+    backgroundImage: 'linear-gradient(rgb(10, 10, 10), rgb(10, 10, 10))',
+    backgroundSize: '0% 1px',
+    imageAssetIds: [],
+  });
+  assert.deepEqual(fills, []);
+});
+
+test('un fond de taille normale est toujours peint', () => {
+  const fills = buildFills({
+    backgroundImage: 'linear-gradient(rgb(10, 10, 10), rgb(10, 10, 10))',
+    backgroundSize: '100% 100%',
+    imageAssetIds: [],
+  });
+  assert.equal(fills.length, 1);
+  assert.equal(fills[0]!.type, 'GRADIENT_LINEAR');
+});
+
+test('seule la couche a zero disparait, les autres restent', () => {
+  const fills = buildFills({
+    backgroundImage:
+      'linear-gradient(rgb(10, 10, 10), rgb(10, 10, 10)), linear-gradient(rgb(255, 0, 0), rgb(255, 0, 0))',
+    backgroundSize: '0% 1px, 100% 100%',
+    imageAssetIds: [],
+  });
+  assert.equal(fills.length, 1);
+  assert.equal(fills[0]!.type, 'GRADIENT_LINEAR');
+  assert.deepEqual((fills[0] as { stops: { color: { r: number } }[] }).stops[0]!.color.r, 1);
+});

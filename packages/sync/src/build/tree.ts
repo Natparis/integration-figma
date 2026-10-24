@@ -22,7 +22,7 @@ import { buildFont } from './fonts.js';
 
 /** Fournit les identifiants d'assets deja telecharges/serialises. */
 export interface AssetResolver {
-  imageId(src: string): string | undefined;
+  imageId(src: string, filter?: string): string | undefined;
   svgId(markup: string): string | undefined;
 }
 
@@ -116,7 +116,7 @@ function buildStyle(node: RawNode, context: BuildContext): StyleSpec {
   const style = node.style;
   const imageAssetIds = node.images
     .filter((img) => img.origin === 'background')
-    .map((img) => context.assets.imageId(img.src))
+    .map((img) => context.assets.imageId(img.src, img.filter))
     .filter((id): id is string => id !== undefined);
 
   const fills = buildFills({
@@ -299,7 +299,7 @@ function stretchesChildren(style: Record<string, string>): boolean {
 function classify(node: RawNode, context: BuildContext): NodeKind {
   if (node.svg && context.assets.svgId(node.svg)) return 'VECTOR';
   const primaryImage = node.images.find((img) => img.origin !== 'background');
-  if (primaryImage && context.assets.imageId(primaryImage.src)) return 'IMAGE';
+  if (primaryImage && context.assets.imageId(primaryImage.src, primaryImage.filter)) return 'IMAGE';
   // Un cercle parfait se lit mieux comme ellipse dans Figma (et s'edite mieux).
   const radii = cornerRadii(node.style, node.rect);
   const isCircle =
@@ -410,7 +410,7 @@ export function buildNode(args: BuildArgs): SpecNode {
 
   if (kind === 'IMAGE') {
     const primary = node.images.find((img) => img.origin !== 'background');
-    const assetId = primary ? context.assets.imageId(primary.src) : undefined;
+    const assetId = primary ? context.assets.imageId(primary.src, primary.filter) : undefined;
     if (assetId) {
       const fit = (primary?.objectFit ?? 'fill').toLowerCase();
       spec.image = {
@@ -524,6 +524,7 @@ export function buildNode(args: BuildArgs): SpecNode {
   ordonnerPourLaDisposition(spec);
   renoncerAuFluxSiChevauchement(spec, context, `${context.route} / ${context.breakpoint} / ${name}`);
   renoncerAuHugNonTenu(spec, context, `${context.route} / ${context.breakpoint} / ${name}`);
+  centrerSiLesEnfantsLeSont(spec);
 
   /* ------------------------- annotations et rotation ---------------------- */
 
@@ -672,6 +673,62 @@ function renoncerAuFluxSiChevauchement(
     where: ou,
     hint: "Dans le code, c'est en general une grille dont les enfants partagent la meme cellule (`grid-area: 1 / 1`).",
   });
+}
+
+/**
+ * Centre la colonne quand ses enfants sont centres par des marges automatiques.
+ *
+ * `max-width` + `margin-inline: auto` est le motif le plus repandu du web pour
+ * un conteneur de contenu. Figma n'a pas de marge automatique : la largeur
+ * plafonnee est bien transmise, mais l'enfant se range au bord GAUCHE de son
+ * parent. Symptome releve : la rangee de chiffres cles de l'accueil, large de
+ * 960 px dans un parent de 1328, partait 184 px trop a gauche et « Avril 2027 »
+ * se faisait couper au bord de la page.
+ *
+ * On juge sur la geometrie mesuree plutot que sur la valeur declaree : une
+ * marge automatique arrive calculee en pixels dans les styles, impossible a
+ * distinguer d'une marge posee a la main — mais un enfant dont les deux cotes
+ * sont a egale distance du bord l'est forcement.
+ *
+ * La regle ne s'applique que si TOUS les enfants en flux l'acceptent : ceux qui
+ * remplissent la largeur ne bougeront pas, les autres doivent deja etre
+ * centres. Un seul enfant cale a gauche suffit a y renoncer — le decentrer
+ * serait pire que le defaut corrige.
+ */
+function centrerSiLesEnfantsLeSont(spec: SpecNode): void {
+  // Axe secondaire horizontal : seule une colonne est concernee.
+  if (spec.layout.mode !== 'VERTICAL') return;
+  // Ne jamais contredire un alignement que le CSS a demande explicitement.
+  if (spec.layout.counterAxisAlignItems !== 'MIN') return;
+
+  const enFlux = spec.children.filter((child) => child.layout.positioning !== 'ABSOLUTE');
+  if (enFlux.length === 0) return;
+
+  const gauche = spec.box.x + spec.layout.padding[3];
+  const droite = spec.box.x + spec.box.w - spec.layout.padding[1];
+
+  const contenu = droite - gauche;
+  let centres = 0;
+  for (const child of enFlux) {
+    // Juger sur la largeur mesuree, pas sur l'etiquette : un enfant « remplir »
+    // plafonne par `max-width` ne remplit rien du tout — c'est precisement le
+    // conteneur de contenu que l'on cherche a centrer.
+    if (Math.abs(child.box.w - contenu) <= 1) continue;
+    const avant = child.box.x - gauche;
+    const apres = droite - (child.box.x + child.box.w);
+    // Tolerance d'un pixel : les demi-pixels de la mise en page sous-pixel ne
+    // doivent pas faire passer un enfant centre pour un enfant cale.
+    if (avant > 1 && Math.abs(avant - apres) <= 1) {
+      centres++;
+      continue;
+    }
+    return;
+  }
+  // Un enfant qui remplit la largeur ne prouve rien : il faut au moins un
+  // enfant reellement centre pour justifier le changement.
+  if (centres === 0) return;
+
+  spec.layout.counterAxisAlignItems = 'CENTER';
 }
 
 /**

@@ -43,6 +43,8 @@ interface PendingImage {
   src: string;
   naturalWidth: number;
   naturalHeight: number;
+  /** `filter` CSS a cuire dans le PNG : Figma n'a pas de filtre d'image. */
+  filter?: string;
 }
 
 export class AssetCollector {
@@ -63,7 +65,7 @@ export class AssetCollector {
     const walk = (node: RawNode): void => {
       for (const image of node.images) {
         if (!image.src) continue;
-        this.registerImage(image.src, image.naturalWidth, image.naturalHeight);
+        this.registerImage(image.src, image.naturalWidth, image.naturalHeight, image.filter);
       }
       if (node.svg) this.registerSvg(node.svg);
       node.children.forEach(walk);
@@ -71,8 +73,21 @@ export class AssetCollector {
     walk(capture.root);
   }
 
-  private registerImage(src: string, width: number, height: number): string {
-    const existing = this.images.get(src);
+  /**
+   * Cle d'une image : sa source ET son filtre.
+   *
+   * Le meme fichier peut servir deux fois sur une page, filtre d'un cote et
+   * brut de l'autre — le logo Metiers d'Excellence est retourne en blanc sur le
+   * heros et laisse en encre sombre une fois l'en-tete pose. Deux assets
+   * distincts, donc deux cles.
+   */
+  private static cle(src: string, filter?: string): string {
+    return filter ? src + ' |filtre| ' + filter : src;
+  }
+
+  private registerImage(src: string, width: number, height: number, filter?: string): string {
+    const cle = AssetCollector.cle(src, filter);
+    const existing = this.images.get(cle);
     if (existing) {
       // Une meme image peut apparaitre a plusieurs tailles : on garde la plus
       // grande, pour ne pas importer une version degradee dans Figma.
@@ -82,8 +97,8 @@ export class AssetCollector {
       }
       return existing.id;
     }
-    const id = `img_${shortHash(stableAssetKey(src, this.origin))}`;
-    this.images.set(src, { id, src, naturalWidth: width, naturalHeight: height });
+    const id = `img_${shortHash(stableAssetKey(src, this.origin) + (filter ?? ''))}`;
+    this.images.set(cle, { id, src, naturalWidth: width, naturalHeight: height, filter });
     return id;
   }
 
@@ -138,12 +153,12 @@ export class AssetCollector {
    * les dessiner dans un canvas, puis on ressort du PNG — le meme detour que
    * pour les images de video. Sans navigateur disponible, on renonce proprement.
    */
-  private async reencoder(bytes: Buffer, mime: string): Promise<Buffer | null> {
+  private async reencoder(bytes: Buffer, mime: string, filtre?: string): Promise<Buffer | null> {
     if (!this.navigateur) return null;
     const page = await this.navigateur.newPage();
     try {
       const donnees = await page.evaluate(
-        async ({ b64, type }) => {
+        async ({ b64, type, filtre: f }) => {
           const binaire = atob(b64);
           const octets = new Uint8Array(binaire.length);
           for (let i = 0; i < binaire.length; i++) octets[i] = binaire.charCodeAt(i);
@@ -159,10 +174,13 @@ export class AssetCollector {
           canvas.height = Math.max(1, Math.round((largeur * image.height) / image.width));
           const contexte = canvas.getContext('2d');
           if (!contexte) return null;
+          // Le filtre est applique par le canvas, avec la meme syntaxe que le
+          // CSS : c'est le navigateur qui l'a calcule, c'est lui qui le rejoue.
+          if (f) contexte.filter = f;
           contexte.drawImage(image, 0, 0, canvas.width, canvas.height);
           return canvas.toDataURL('image/png');
         },
-        { b64: bytes.toString('base64'), type: mime },
+        { b64: bytes.toString('base64'), type: mime, filtre },
       );
       if (!donnees) return null;
       return Buffer.from(donnees.slice(donnees.indexOf(',') + 1), 'base64');
@@ -211,7 +229,7 @@ export class AssetCollector {
       if (mime === 'image/svg+xml') {
         const file = `assets/${image.id}.svg`;
         await writeFile(path.join(this.outputDir, file), bytes);
-        this.resolved.set('img:' + image.src, {
+        this.resolved.set('img:' + AssetCollector.cle(image.src, image.filter), {
           id: image.id,
           kind: 'SVG',
           file,
@@ -221,6 +239,31 @@ export class AssetCollector {
           hash: shortHash(bytes),
         });
         return;
+      }
+
+      // Un filtre CSS se cuit dans le PNG, quel que soit le format d'origine :
+      // Figma n'a pas de filtre d'image, et le logo serait rendu tel quel.
+      if (image.filter) {
+        const filtre = await this.reencoder(bytes, mime, image.filter);
+        if (filtre) {
+          this.diagnostics.push({
+            level: 'info',
+            code: 'asset-filter-applied',
+            message: `Filtre « ${image.filter} » applique a l image avant import : ${shorten(image.src)}`,
+            where: image.src,
+            hint: "Figma n'a pas de filtre d'image : il est cuit dans le PNG.",
+          });
+          bytes = filtre;
+          mime = 'image/png';
+        } else {
+          this.diagnostics.push({
+            level: 'warn',
+            code: 'asset-filter-skipped',
+            message: `Filtre « ${image.filter} » non applique : ${shorten(image.src)}`,
+            where: image.src,
+            hint: "L'image arrivera telle quelle dans Figma.",
+          });
+        }
       }
 
       if (!FIGMA_RASTER.has(mime)) {
@@ -264,7 +307,7 @@ export class AssetCollector {
       };
       if (image.naturalWidth > 0) asset.width = image.naturalWidth;
       if (image.naturalHeight > 0) asset.height = image.naturalHeight;
-      this.resolved.set('img:' + image.src, asset);
+      this.resolved.set('img:' + AssetCollector.cle(image.src, image.filter), asset);
     } catch (error) {
       this.failed.add(image.src);
       this.diagnostics.push({
@@ -278,9 +321,13 @@ export class AssetCollector {
   }
 
   /** Resolveur passe au constructeur d'arbre. */
-  resolver(): { imageId(src: string): string | undefined; svgId(markup: string): string | undefined } {
+  resolver(): {
+    imageId(src: string, filter?: string): string | undefined;
+    svgId(markup: string): string | undefined;
+  } {
     return {
-      imageId: (src: string) => this.resolved.get('img:' + src)?.id,
+      imageId: (src: string, filter?: string) =>
+        this.resolved.get('img:' + AssetCollector.cle(src, filter))?.id,
       svgId: (markup: string) => this.resolved.get('svg:' + shortHash(markup))?.id,
     };
   }

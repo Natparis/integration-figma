@@ -142,6 +142,18 @@ export interface FillContext {
 }
 
 /**
+ * Une valeur de `background-size` qui ne peint rien.
+ *
+ * CSS admet une ou deux composantes (`0%`, `0% 1px`, `cover`…). Il suffit
+ * qu'une seule soit nulle pour que la couche soit invisible.
+ */
+function taillePeintRien(valeur: string | undefined): boolean {
+  if (!valeur) return false;
+  const composantes = valeur.trim().toLowerCase().split(/\s+/);
+  return composantes.some((c) => /^0(\.0+)?(%|px|r?em|vw|vh)?$/.test(c));
+}
+
+/**
  * Construit la pile de remplissages Figma.
  *
  * Attention a l'ordre : en CSS, `background-image` se peint AU-DESSUS de
@@ -160,9 +172,18 @@ export function buildFills(context: FillContext): Paint[] {
   const image = context.backgroundImage;
   if (image && image !== 'none') {
     const layers = splitTopLevel(image);
+    const tailles = splitTopLevel(context.backgroundSize ?? 'auto');
     let assetIndex = 0;
     const built: Paint[] = [];
-    for (const layer of layers) {
+    for (const [rang, layer] of layers.entries()) {
+      // Une couche dont une dimension vaut zero ne peint rien. C'est le motif
+      // du soulignement qui se deploie au survol : `background-size: 0% 1px`
+      // au repos, `100% 1px` au survol. Peinte comme un remplissage pleine
+      // boite, elle couvrait le lien d'un rectangle noir — releve sur les
+      // liens « Decouvrir l'evenement » et « Reserver », et sur tous les liens
+      // du pied de page.
+      if (taillePeintRien(tailles[rang % Math.max(1, tailles.length)])) continue;
+
       if (/^(repeating-)?(linear|radial|conic)-gradient\(/i.test(layer)) {
         const gradient = parseGradient(layer);
         if (gradient) built.push(gradient);
@@ -171,7 +192,7 @@ export function buildFills(context: FillContext): Paint[] {
       if (/^url\(/i.test(layer)) {
         const assetId = context.imageAssetIds?.[assetIndex++];
         if (!assetId) continue;
-        const size = (context.backgroundSize ?? 'auto').toLowerCase();
+        const size = (tailles[assetIndex % Math.max(1, tailles.length)] ?? 'auto').toLowerCase();
         built.push({
           type: 'IMAGE',
           assetId,

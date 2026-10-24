@@ -641,6 +641,7 @@ export function collectPage(options: CollectOptions): RawCapture {
           alt: '',
           origin: 'background',
           objectFit: cs.backgroundSize === 'contain' ? 'contain' : 'cover',
+          filter: cs.filter && cs.filter !== 'none' ? cs.filter : undefined,
         });
       }
       match = pattern.exec(value);
@@ -896,6 +897,7 @@ export function collectPage(options: CollectOptions): RawCapture {
           alt: img.getAttribute('alt') ?? '',
           origin: 'img',
           objectFit: cs.objectFit,
+          filter: cs.filter && cs.filter !== 'none' ? cs.filter : undefined,
         });
       }
       return node;

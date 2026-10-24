@@ -327,3 +327,44 @@ test('« ajuster au contenu » survit a un minimum declare', async () => {
   };
   assert.ok(garde(racine) > 10, 'plus aucun cadre en « ajuster au contenu » : le garde-fou fige la maquette');
 });
+
+test('un filtre CSS est cuit dans l image, et donne un asset distinct', async () => {
+  // Regression : le logo de l en-tete est une encre sombre que le site
+  // retourne en blanc par `filter: brightness(0) invert(1)` tant que l en-tete
+  // flotte sur le heros. Figma n a pas de filtre d image : le logo arrivait
+  // noir sur fond noir, invisible. Le meme fichier servant aussi non filtre
+  // une fois l en-tete pose, les deux versions doivent coexister.
+  const spec = await extraireSpec();
+
+  const versions = spec.assets.filter((a) => /vignette\.webp$/.test(a.source));
+  assert.equal(versions.length, 2, 'la version filtree et la version brute doivent etre deux assets');
+  assert.notEqual(versions[0]!.id, versions[1]!.id);
+  for (const v of versions) assert.equal(v.mime, 'image/png');
+
+  const applique = spec.diagnostics.filter((d) => d.code === 'asset-filter-applied');
+  assert.ok(applique.length >= 1, 'aucun filtre applique');
+  const ignore = spec.diagnostics.filter((d) => d.code === 'asset-filter-skipped');
+  assert.deepEqual(ignore, [], 'un filtre decodable ne doit pas etre abandonne');
+});
+
+test('un conteneur centre par marges automatiques reste centre', async () => {
+  // Regression : `max-width` + `margin-inline: auto` est le motif le plus
+  // repandu du web. Figma n a pas de marge automatique : la largeur plafonnee
+  // passait bien, mais l enfant se rangeait au bord gauche. La rangee de
+  // chiffres cles de l accueil partait ainsi 184 px trop a gauche, et
+  // « Avril 2027 » se faisait couper au bord de la page.
+  const racine = await extraire();
+  const colonne = trouverParNom(racine, /^Colonne large$/i);
+  assert.ok(colonne, 'section de colonne introuvable dans la page de cas limites');
+  assert.equal(colonne!.layout.counterAxisAlignItems, 'CENTER');
+});
+
+test('une colonne dont les enfants sont cales a gauche n est pas recentree', async () => {
+  // Garde-fou : recentrer une colonne ordinaire deplacerait tout son contenu.
+  // La section des cartes empilees commence au bord gauche de son
+  // remplissage ; elle doit y rester.
+  const racine = await extraire();
+  const cartes = trouverParNom(racine, /^Cartes$/i);
+  assert.ok(cartes, 'section des cartes introuvable');
+  assert.notEqual(cartes!.layout.counterAxisAlignItems, 'CENTER');
+});
