@@ -51,6 +51,14 @@
      n a pas de marge automatique, l enfant se range a gauche. */
   .colonne-large { display: block; width: 100%; }
   .colonne-filet { height: 1px; background: #d8d5cf; }
+  /* Bloc dont la largeur vient de son parent, pas de son contenu : un filet
+     etroit a cote d un titre pleine largeur. « Ajuster au contenu » replierait
+     le bloc sur le filet. */
+  .bloc-rangee { display: flex; align-items: flex-start; gap: 24px; padding: 24px; }
+  .bloc-voisin { flex: 1; margin: 0; }
+  .bloc-circulaire { display: flex; flex-direction: column; align-items: flex-start; padding: 12px; }
+  .bloc-circulaire > .bloc-filet { width: 56px; height: 1px; background: #0A0A0A; }
+  .bloc-circulaire > .bloc-titre { display: block; width: 100%; font-size: 34px; letter-spacing: .14em; }
   .colonne-centree { max-width: 400px; margin: 0 auto; background: #eee; padding: 12px; }
   .cartes { padding: 24px; }
   .carte-empilee { display: grid; width: 320px; }
@@ -196,6 +204,14 @@
     <section class="colonne-large">
       <div class="colonne-filet"></div>
       <div class="colonne-centree">COLONNE CENTREE PAR MARGES AUTOMATIQUES</div>
+    </section>
+
+    <section class="bloc-rangee">
+      <div class="bloc-circulaire">
+        <div class="bloc-titre">TITRE PLEINE LARGEUR DU BLOC</div>
+        <div class="bloc-filet"></div>
+      </div>
+      <p class="bloc-voisin">Texte voisin, qui occupe le reste de la rangee.</p>
     </section>
 
     <section class="heros-mesure">

@@ -368,3 +368,21 @@ test('une colonne dont les enfants sont cales a gauche n est pas recentree', asy
   assert.ok(cartes, 'section des cartes introuvable');
   assert.notEqual(cartes!.layout.counterAxisAlignItems, 'CENTER');
 });
+
+test('un conteneur dont un enfant remplit le meme axe ne peut pas s ajuster a son contenu', async () => {
+  // Regression de la vue tablette : « La programmation » tenait sa largeur de
+  // sa piste de grille, pas de son contenu, et portait un filet de 56 px a
+  // cote d un titre pleine largeur. En « ajuster au contenu », Figma replie le
+  // cadre sur son plus large enfant NON remplissant — le filet — et le titre
+  // sortait a 56 px de large, une lettre par ligne.
+  const racine = await extraire();
+  const bloc = trouverParNom(racine, /^Bloc circulaire$/i);
+  assert.ok(bloc, 'bloc introuvable dans la page de cas limites');
+
+  const remplit = bloc!.children.some(
+    (enfant) =>
+      enfant.layout.positioning !== 'ABSOLUTE' && enfant.layout.sizing.horizontal === 'FILL',
+  );
+  assert.ok(remplit, 'le cas ne reproduit plus un enfant qui remplit la largeur');
+  assert.equal(bloc!.layout.sizing.horizontal, 'FIXED');
+});

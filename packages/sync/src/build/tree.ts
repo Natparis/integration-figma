@@ -795,6 +795,27 @@ function renoncerAuHugNonTenu(spec: SpecNode, context: BuildContext, ou: string)
 
   for (const axe of ['horizontal', 'vertical'] as const) {
     if (sizing[axe] !== 'HUG') continue;
+
+    // « Ajuster au contenu » face a un enfant qui « remplit le conteneur » sur
+    // le MEME axe : chacun attend la mesure de l'autre. Figma tranche en
+    // repliant le cadre sur son plus large enfant non remplissant — et quand
+    // c'est un filet de 56 px, le titre « La programmation » se retrouve a
+    // 56 px de large, une lettre par ligne. Releve sur la vue tablette.
+    if (enFlux.some((child) => child.layout.sizing[axe] === 'FILL')) {
+      sizing[axe] = 'FIXED';
+      context.diagnostics.push({
+        level: 'info',
+        code: 'layout-hug-circulaire',
+        message:
+          `« Ajuster au contenu » abandonne sur l axe ${axe === 'vertical' ? 'vertical' : 'horizontal'} : ` +
+          'un enfant remplit le conteneur sur le meme axe, chacun attendrait la mesure de l autre. ' +
+          `Taille fixe a ${Math.round(mesure[axe])} px.`,
+        where: ou,
+        hint: "Dans le code, le conteneur tient sa largeur de sa piste de grille ou de son parent, pas de son contenu.",
+      });
+      continue;
+    }
+
     const tolerance = Math.max(8, mesure[axe] * 0.05);
     const manque = mesure[axe] - attendu[axe];
     if (Math.abs(manque) <= tolerance) continue;
