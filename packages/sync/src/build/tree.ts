@@ -13,7 +13,7 @@ import type { PathSegment } from '@sfs/spec';
 import type { RawNode } from '../browser/raw.js';
 import { parseColor } from './color.js';
 import {
-  buildFills, buildStrokes, cornerRadii, parseBlur, parseBoxShadow,
+  buildFills, buildStrokes, cornerRadii, filetDeFond, parseBlur, parseBoxShadow,
   parseFilterDropShadow, px, rgbOf, rotationFromTransform,
 } from './css-map.js';
 import { absoluteConstraints, inferLayout, inferSizing, sizeLimits } from './layout.js';
@@ -119,12 +119,14 @@ function buildStyle(node: RawNode, context: BuildContext): StyleSpec {
     .map((img) => context.assets.imageId(img.src, img.filter))
     .filter((id): id is string => id !== undefined);
 
-  const fills = buildFills({
+  const fondContexte = {
     backgroundColor: style.backgroundColor,
     backgroundImage: style.backgroundImage,
     backgroundSize: style.backgroundSize,
     imageAssetIds,
-  });
+    boxHeight: node.rect.h,
+  };
+  const fills = buildFills(fondContexte);
 
   // Liaison aux variables : c'est ce qui rend le fichier pilotable par tokens
   // plutot que par couleurs figees.
@@ -136,6 +138,18 @@ function buildStyle(node: RawNode, context: BuildContext): StyleSpec {
     bottom: { width: px(style.borderBottomWidth), style: style.borderBottomStyle ?? 'none', color: style.borderBottomColor },
     left: { width: px(style.borderLeftWidth), style: style.borderLeftStyle ?? 'none', color: style.borderLeftColor },
   });
+
+  // Soulignement pose en fond : il devient un contour bas, faute de quoi il
+  // couvrirait le lien d'un aplat. On ne l'ajoute que si l'element n'a pas
+  // deja de bordure — deux traits superposes vaudraient moins qu'un.
+  if (strokeResult.strokes.length === 0) {
+    const filet = filetDeFond(fondContexte);
+    if (filet) {
+      strokeResult.strokes = [filet];
+      strokeResult.strokeWeight = 1;
+      strokeResult.individualStrokeWeights = { top: 0, right: 0, bottom: 1, left: 0 };
+    }
+  }
 
   const effects = [
     ...parseBoxShadow(style.boxShadow),

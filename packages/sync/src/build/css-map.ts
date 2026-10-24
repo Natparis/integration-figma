@@ -139,6 +139,59 @@ export interface FillContext {
   backgroundSize?: string;
   /** Identifiants d'assets deja resolus pour les url() de cet element. */
   imageAssetIds?: string[];
+  /** Hauteur mesuree de la boite : sert a reconnaitre un fond en filet. */
+  boxHeight?: number;
+}
+
+/**
+ * Hauteur peinte par une valeur de `background-size`, en pixels, ou `null`.
+ *
+ * Seules les longueurs absolues comptent : un pourcentage ou `cover` se
+ * resout contre la boite, pas contre un filet.
+ */
+function hauteurPeinte(valeur: string | undefined): number | null {
+  if (!valeur) return null;
+  const composantes = valeur.trim().toLowerCase().split(/\s+/);
+  if (composantes.length < 2) return null;
+  const match = /^([\d.]+)(px|r?em)$/.exec(composantes[1]!);
+  if (!match) return null;
+  const n = parseFloat(match[1]!);
+  if (!Number.isFinite(n)) return null;
+  return match[2] === 'px' ? n : n * 16;
+}
+
+/** Un fond qui tient en un trait plutot qu'en un aplat. */
+export function estUnFilet(valeur: string | undefined, hauteurBoite?: number): boolean {
+  const hauteur = hauteurPeinte(valeur);
+  if (hauteur === null || hauteur <= 0) return false;
+  if (hauteur > 2) return false;
+  // Sur une boite deja minuscule, un fond de 2 px EST l'aplat.
+  return hauteurBoite === undefined || hauteur < hauteurBoite * 0.25;
+}
+
+/**
+ * Couleur du filet de fond, quand il y en a un : sert a le rendre en contour
+ * bas plutot qu'en remplissage.
+ */
+export function filetDeFond(context: FillContext): Paint | null {
+  const image = context.backgroundImage;
+  if (!image || image === 'none') return null;
+  const layers = splitTopLevel(image);
+  const tailles = splitTopLevel(context.backgroundSize ?? 'auto');
+  for (const [rang, layer] of layers.entries()) {
+    const taille = tailles[rang % Math.max(1, tailles.length)];
+    // `0% 1px` est un filet par la hauteur, mais sa largeur est nulle : c'est
+    // le soulignement au repos, qui ne doit rien dessiner du tout.
+    if (taillePeintRien(taille)) continue;
+    if (!estUnFilet(taille, context.boxHeight)) continue;
+    if (!/^(repeating-)?(linear|radial|conic)-gradient\(/i.test(layer)) continue;
+    const gradient = parseGradient(layer);
+    if (!gradient || gradient.type !== 'GRADIENT_LINEAR') continue;
+    const premier = gradient.stops[0];
+    if (!premier) continue;
+    return { type: 'SOLID', color: { r: premier.color.r, g: premier.color.g, b: premier.color.b }, opacity: premier.color.a };
+  }
+  return null;
 }
 
 /**
@@ -182,7 +235,13 @@ export function buildFills(context: FillContext): Paint[] {
       // boite, elle couvrait le lien d'un rectangle noir — releve sur les
       // liens « Decouvrir l'evenement » et « Reserver », et sur tous les liens
       // du pied de page.
-      if (taillePeintRien(tailles[rang % Math.max(1, tailles.length)])) continue;
+      const taille = tailles[rang % Math.max(1, tailles.length)];
+      if (taillePeintRien(taille)) continue;
+      // Un fond haut d'un ou deux pixels n'est pas un aplat : c'est un trait.
+      // `background-size: 100% 1px` souligne en permanence l'entree de menu de
+      // la page courante — repere exige par l'audit. Peint comme remplissage,
+      // il recouvrait le lien d'un bloc colore ; il ressort en contour bas.
+      if (estUnFilet(taille, context.boxHeight)) continue;
 
       if (/^(repeating-)?(linear|radial|conic)-gradient\(/i.test(layer)) {
         const gradient = parseGradient(layer);

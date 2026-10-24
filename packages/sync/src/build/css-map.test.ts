@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildFills, buildStrokes, cornerRadii, parseBlur, parseBoxShadow,
-  parseGradient, rotationFromTransform, splitTopLevel,
+  parseGradient, rotationFromTransform, splitTopLevel, filetDeFond,
 } from './css-map.js';
 
 test('splitTopLevel ignore les virgules a l interieur des parentheses', () => {
@@ -206,4 +206,47 @@ test('seule la couche a zero disparait, les autres restent', () => {
   assert.equal(fills.length, 1);
   assert.equal(fills[0]!.type, 'GRADIENT_LINEAR');
   assert.deepEqual((fills[0] as { stops: { color: { r: number } }[] }).stops[0]!.color.r, 1);
+});
+
+test('un fond en filet devient un contour bas, pas un aplat', () => {
+  // Regression : l entree de menu de la page courante porte un soulignement
+  // permanent en `background-size: 100% 1px` — le repere non chromatique
+  // exige par l audit. Peint comme remplissage, il recouvrait le lien d un
+  // bloc colore. Releve sur « Mon compte », « La programmation » et
+  // « Declaration d accessibilite ».
+  const contexte = {
+    backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.82))',
+    backgroundSize: '100% 1px',
+    boxHeight: 26,
+    imageAssetIds: [],
+  };
+  assert.deepEqual(buildFills(contexte), []);
+
+  const filet = filetDeFond(contexte);
+  assert.ok(filet, 'le filet doit ressortir en contour');
+  assert.equal(filet!.type, 'SOLID');
+  assert.ok(Math.abs((filet as { opacity: number }).opacity - 0.82) < 0.01);
+});
+
+test('un soulignement au repos ne dessine meme pas de contour', () => {
+  // `0% 1px` est un filet par la hauteur, mais sa largeur est nulle.
+  const contexte = {
+    backgroundImage: 'linear-gradient(rgb(10, 10, 10), rgb(10, 10, 10))',
+    backgroundSize: '0% 1px',
+    boxHeight: 40,
+    imageAssetIds: [],
+  };
+  assert.deepEqual(buildFills(contexte), []);
+  assert.equal(filetDeFond(contexte), null);
+});
+
+test('sur une boite minuscule, un fond de deux pixels reste un aplat', () => {
+  const contexte = {
+    backgroundImage: 'linear-gradient(rgb(10, 10, 10), rgb(10, 10, 10))',
+    backgroundSize: '100% 2px',
+    boxHeight: 3,
+    imageAssetIds: [],
+  };
+  assert.equal(buildFills(contexte).length, 1);
+  assert.equal(filetDeFond(contexte), null);
 });
